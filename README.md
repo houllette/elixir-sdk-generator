@@ -16,29 +16,14 @@ A production-ready GitHub template for generating Elixir SDKs from OpenAPI speci
 
 ## Quick Start
 
-> **Prerequisites**: Elixir 1.14+, Erlang/OTP 25+, and OpenAPI Generator
+> **Prerequisites**: Elixir 1.18+, Erlang/OTP 26+, and OpenAPI Generator
 > Install OpenAPI Generator via: `brew install openapi-generator` (macOS/Linux) or `npm install -g @openapitools/openapi-generator-cli`
-> See [INSTALLATION.md](INSTALLATION.md) for detailed installation instructions
 
 ### 1. Use This Template
 
 Click the "Use this template" button on GitHub to create your own repository.
 
-### 2. Clean Up Template (Optional)
-
-Remove template-specific files and start fresh:
-
-```bash
-./scripts/cleanup-template.sh
-```
-
-This will:
-- Reset CHANGELOG.md
-- Create a minimal README
-- Remove template documentation
-- Optionally reset git history
-
-### 3. Run Setup
+### 2. Run Setup
 
 ```bash
 ./scripts/setup.sh
@@ -51,7 +36,7 @@ This interactive script will prompt you for:
 - GitHub repository details
 - OpenAPI specification location
 
-### 4. Generate SDK
+### 3. Generate SDK
 
 ```bash
 ./scripts/regenerate.sh
@@ -65,7 +50,7 @@ This will:
 - Install dependencies
 - Run tests
 
-### 5. Review and Test
+### 4. Review and Test
 
 ```bash
 mix test
@@ -171,9 +156,6 @@ git push
 ```
 
 ## GitHub Actions Workflows
-
-> **Note**: Workflows are disabled by default in the template (`.yml.disabled` extension).
-> Running `./scripts/setup.sh` automatically enables them by renaming to `.yml`.
 
 ### Continuous Integration (test.yml)
 
@@ -346,10 +328,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
-
-## License
-
-MIT License - See LICENSE file for details
 
 ## Resources
 
