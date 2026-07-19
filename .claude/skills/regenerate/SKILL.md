@@ -44,6 +44,9 @@ deps, formats, and runs the tests.
    AGENTS.md).
 4. Flesh out any newly created starter tests in `test/unit/` with at least
    one real request/response test per new operation, using `MockServer`.
+5. If dependencies changed, confirm `bom.cdx.json` was regenerated (the
+   regenerate script and pre-commit hook both do this; `mix sbom` refreshes
+   it manually).
 
 ## 5. Finish
 

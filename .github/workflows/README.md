@@ -53,6 +53,9 @@ rm template-smoke.yml
   --check-unused` and `mix hex.audit`.
 - **Coverage**: `mix coveralls` enforces the `minimum_coverage` threshold set
   in `coveralls.json` (0 by default; raise it once you have real tests)
+- **SBOM**: verifies the committed `bom.cdx.json` matches the current
+  dependency set (regenerate with `mix sbom` if it drifts) and uploads it as
+  a build artifact
 
 ### spec-sync.yml
 
@@ -103,7 +106,8 @@ rm template-smoke.yml
 - **Trigger**: version tags (`v*.*.*`) or manual dispatch
 - **Requirements**: `HEX_API_KEY` secret (get it from `mix hex.user auth`)
 - Verifies the tag matches `@version` in `mix.exs`, runs tests, publishes to
-  Hex.pm, and creates a GitHub release
+  Hex.pm, and creates a GitHub release with the CycloneDX SBOM
+  (`bom.cdx.json`) attached
 
 ### breaking-changes.yml
 

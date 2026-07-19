@@ -70,6 +70,37 @@ jobs:
       - name: Run tests with coverage
         run: mix coveralls
 
+      # The SBOM (bom.cdx.json) is committed and kept in sync by the
+      # pre-commit hook; this check catches drift (e.g. dep changes committed
+      # with hooks disabled). Timestamp and serial number are excluded from
+      # the comparison — they change on every generation.
+      - name: Verify SBOM is up to date
+        run: |
+          cp bom.cdx.json /tmp/committed-bom.json
+          MIX_ENV=dev mix sbom
+          python3 - <<'PY'
+          import json, sys
+
+          def normalize(path):
+              with open(path) as f:
+                  bom = json.load(f)
+              bom.pop("serialNumber", None)
+              bom.get("metadata", {}).pop("timestamp", None)
+              return bom
+
+          if normalize("/tmp/committed-bom.json") != normalize("bom.cdx.json"):
+              print("::error::bom.cdx.json is out of date. Run 'mix sbom' and commit the result")
+              print("::error::(or enable the versioned hooks: git config core.hooksPath .githooks).")
+              sys.exit(1)
+          print("SBOM is up to date.")
+          PY
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: bom.cdx.json
+
   # The SDK declares `elixir: "~> 1.18"` in mix.exs; this job proves it still
   # works on the minimum supported toolchain.
   compat:

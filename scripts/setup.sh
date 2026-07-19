@@ -448,6 +448,15 @@ cleanup_template_artifacts() {
   fi
 }
 
+# Point git at the versioned hooks directory (pre-commit keeps the SBOM in
+# sync with dependency changes)
+configure_git_hooks() {
+  if [[ -d "$PROJECT_ROOT/.git" ]] && [[ -d "$PROJECT_ROOT/.githooks" ]]; then
+    git -C "$PROJECT_ROOT" config core.hooksPath .githooks
+    echo_info "Configured git hooks path (.githooks — pre-commit keeps bom.cdx.json in sync)"
+  fi
+}
+
 # Initialize git if not already a repo
 init_git() {
   if [[ "$SKIP_GIT" == "1" ]]; then
@@ -489,6 +498,7 @@ main() {
   enable_workflows
   cleanup_template_artifacts
   init_git
+  configure_git_hooks
 
   echo ""
   echo_info "Setup complete! Next steps:"

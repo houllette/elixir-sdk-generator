@@ -113,6 +113,56 @@ Before releasing, run the full quality gate locally:
 mix check
 ```
 
+Each release automatically gets the CycloneDX SBOM (`bom.cdx.json`) attached.
+
+## Configuration Reference
+
+### Connection options
+
+```elixir
+conn = MySDK.Connection.new(
+  base_url: "https://api.example.com",     # override the configured base URL
+  timeout: 60_000,                          # per-request timeout (ms)
+  retry: [max_retries: 5, delay: 200, max_delay: 10_000],
+  middleware: [{Tesla.Middleware.Logger, []}]
+)
+
+conn = MySDK.Connection.new(retry: false)   # disable retries
+```
+
+### Retry semantics
+
+Retries use exponential backoff and are **limited to idempotent HTTP methods**
+(GET, HEAD, OPTIONS, PUT, DELETE) on status 408/429/5xx or transport errors —
+a POST is never replayed automatically. Override with a custom predicate:
+
+```elixir
+conn = MySDK.Connection.new(retry: [should_retry: fn result, env, _ctx -> ... end])
+```
+
+### Runtime configuration
+
+```elixir
+# config/runtime.exs
+config :my_api_client,
+  base_url: System.get_env("API_BASE_URL", "https://api.example.com"),
+  pool_size: String.to_integer(System.get_env("HTTP_POOL_SIZE", "25")),
+  pool_count: 1,
+  connect_timeout: 5_000
+```
+
+### SBOM
+
+A CycloneDX SBOM lives at `bom.cdx.json` and is committed. The pre-commit
+hook (enabled by setup via `git config core.hooksPath .githooks`) regenerates
+it whenever `mix.exs`/`mix.lock` change; CI fails if it drifts, and the
+publish workflow attaches it to every GitHub release. Regenerate manually
+with:
+
+```bash
+mix sbom
+```
+
 ## Common Tasks
 
 ### Update API from New Spec

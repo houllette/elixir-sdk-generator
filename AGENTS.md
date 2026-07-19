@@ -32,6 +32,7 @@ overview" section below. For ongoing spec/template changes use the
 | Format | `mix format` |
 | Lint | `mix credo --strict` |
 | Type check | `mix dialyzer` |
+| Generate/refresh the SBOM | `mix sbom` (writes `bom.cdx.json`) |
 | Cut a release (version + changelog + tag) | `mix git_ops.release` (or the Release workflow) |
 | Publish to Hex.pm | `./scripts/publish.sh` |
 
@@ -78,6 +79,9 @@ review the diff.
 - **Run `mix check` before pushing** — it mirrors the CI gate (unused deps,
   warnings-as-errors, format, credo strict, tests, plus an informational
   hex.audit).
+- **The SBOM (`bom.cdx.json`) is committed.** The pre-commit hook (enabled
+  via `git config core.hooksPath .githooks`, done by setup) regenerates it
+  when mix.exs/mix.lock change; CI fails if it drifts. Never edit it by hand.
 
 ## Versions
 

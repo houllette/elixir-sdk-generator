@@ -31,6 +31,10 @@ CLAUDE.md
 .claude/**
 .editorconfig
 
+# Git hooks and SBOM
+.githooks/**
+bom.cdx.json
+
 # Spec source URL (used by the spec-sync workflow)
 .spec-source
 

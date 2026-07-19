@@ -215,6 +215,19 @@ run_tests() {
   fi
 }
 
+# Generate the Software Bill of Materials (committed as bom.cdx.json; kept
+# in sync by the pre-commit hook and verified by CI)
+generate_sbom() {
+  echo_step "Generating SBOM..."
+
+  if command -v mix &> /dev/null; then
+    cd "$PROJECT_ROOT"
+    mix sbom || echo_warn "Failed to generate SBOM (this is non-fatal; run 'mix sbom' manually)"
+  else
+    echo_warn "mix not found, skipping SBOM generation."
+  fi
+}
+
 # Check for breaking changes
 check_breaking_changes() {
   echo_step "Checking for breaking changes..."
@@ -271,6 +284,7 @@ main() {
   # tesla dep's formatter rules
   install_deps
   format_code
+  generate_sbom
   check_breaking_changes
   run_tests
 

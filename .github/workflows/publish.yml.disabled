@@ -77,11 +77,15 @@ jobs:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
         run: mix hex.publish --yes
 
+      - name: Generate SBOM for release
+        run: MIX_ENV=dev mix sbom
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ steps.version.outputs.version }}
+          files: bom.cdx.json
           body: |
             ## Release ${{ steps.version.outputs.version }}
 
@@ -91,3 +95,5 @@ jobs:
 
             - [Hex Docs](https://hexdocs.pm/${{ github.event.repository.name }})
             - [GitHub](https://github.com/${{ github.repository }})
+
+            A CycloneDX SBOM (`bom.cdx.json`) is attached to this release.
