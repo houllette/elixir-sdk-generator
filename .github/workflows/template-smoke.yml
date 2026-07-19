@@ -144,6 +144,22 @@ jobs:
             fi
           done
 
+          # Setup must remove its own one-shot machinery
+          for f in scripts/setup.sh setup.example.json; do
+            if [ -e "$f" ]; then
+              echo "::error::$f should have been removed by setup.sh"
+              exit 1
+            fi
+          done
+          if grep -q 'will be replaced by setup.sh' generator-config.yaml; then
+            echo "::error::generator-config.yaml still contains setup tombstone comments"
+            exit 1
+          fi
+          if [ ! -f spec-patches/README.md ] || [ ! -x scripts/apply-spec-patches.sh ]; then
+            echo "::error::spec-patches machinery should survive setup"
+            exit 1
+          fi
+
           # Setup must remove the one-shot /setup-sdk skill but keep /regenerate
           if [ -d .claude/skills/setup-sdk ]; then
             echo "::error::.claude/skills/setup-sdk should have been removed by setup.sh"

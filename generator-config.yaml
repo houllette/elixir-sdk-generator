@@ -20,6 +20,12 @@ inputSpec: openapi-spec.yaml
 # Template directory (complete vendored template set)
 templateDir: .openapi-generator/templates
 
+# GitHub coordinates for source/package links in mix.exs. These MUST be
+# top-level keys: the generator ignores them under additionalProperties and
+# emits its GIT_USER_ID/GIT_REPO_ID placeholder defaults instead.
+gitUserId: "{{GIT_USER}}"
+gitRepoId: "{{GIT_REPO}}"
+
 # Extra template files not part of the stock elixir generator.
 # The lib/ path is filled in by scripts/setup.sh (underscored module name).
 files:
@@ -33,8 +39,8 @@ additionalProperties:
   # Package name (will be replaced by setup.sh)
   packageName: "{{PACKAGE_NAME}}"
 
-  # Module namespace for generated code (will be replaced by setup.sh;
-  # defaults to the camelized package name, e.g. my_api -> MyAPI).
+  # Module namespace for generated code. Defaults to the camelized
+  # package name, e.g. my_api -> MyAPI. (will be replaced by setup.sh)
   invokerPackage: "{{MODULE_NAME}}"
 
   # Package version
@@ -47,6 +53,3 @@ additionalProperties:
   # SPDX license id used in mix.exs (will be replaced by setup.sh)
   licenseId: "{{LICENSE_ID}}"
 
-  # GitHub repo (will be replaced by setup.sh)
-  gitRepoId: "{{GIT_REPO}}"
-  gitUserId: "{{GIT_USER}}"

@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (from the first production mint — ex_bifrost, ~490 operations)
+- `gitUserId`/`gitRepoId` moved to top-level generator config keys — under
+  `additionalProperties` the generator ignored them and shipped
+  GIT_USER_ID/GIT_REPO_ID placeholders in mix.exs and the SBOM
+- Multipart request building in the vendored `request_builder` template:
+  Tesla.Multipart requires binary part names (atoms crashed every
+  file-upload operation), and `:form` + `:file` parameters now compose into
+  one multipart in either order (previously crashed or silently dropped the
+  form field); the bundled example spec gained an upload endpoint so the
+  smoke test exercises this path permanently
+- `@version` extraction anchored to the attribute definition in
+  publish.yml, publish.sh, release.yml, and regenerate.sh — the generated
+  mix.exs mentions `@version` on three lines, so the unanchored grep made
+  every tag-triggered publish fail its version check
+- Documented the working first-release path (manual `git tag`, mirroring
+  release.yml): `git_ops.release --initial` conflicts with the CHANGELOG
+  setup writes, and plain `git_ops.release` with zero tags fails with a
+  confusing blank-tag error
+- The CI SBOM drift check is now deterministic: it compares only fields
+  derived from mix.exs/mix.lock (root component + pkg:hex components +
+  pruned dependency graph), retries `mix sbom` against hex.pm fetcher
+  timeouts, and prints a normalized diff on failure
+
+### Added (from the first production mint)
+- Reflection-driven surface tests shipped with every SDK: every generated
+  model builds and decodes, every generated operation round-trips against a
+  catch-all mock server (files included), plus unit tests for the
+  template-owned Connection/RequestBuilder/Deserializer runtime — measured
+  98%+ coverage on the example SDK, so `minimum_coverage` now ships at 90
+- `.credo.exs` keeping `--strict` for hand-written code while scoping three
+  spec-driven checks (line length, struct field count, predicate names) away
+  from generated `lib/`
+- `spec-patches/`: ordered, idempotent, executable patches applied to the
+  spec after every download and before every regeneration — durable local
+  fixes for upstream spec defects that spec-sync would otherwise reintroduce
+- Setup now fully cleans up after itself (removes `scripts/setup.sh`,
+  `setup.example.json`, tombstone comments, and the CONTRIBUTING setup
+  section), personalizes the config examples with the real package name,
+  and drops any stale template SBOM
+- Documented the Hex ≥ 2.5 CI key flow (browser-created `api:write` keys;
+  `mix hex.user key generate` no longer exists)
+
 ### Added (template & tooling)
 - **Attribution**: generated files carry a header crediting OpenAPI Generator
   and the [Elixir SDK Generator](https://github.com/houllette/elixir-sdk-generator)

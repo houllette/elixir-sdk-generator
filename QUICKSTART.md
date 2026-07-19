@@ -76,8 +76,11 @@ mix dialyzer
 
 ## Step 4: Add Real Tests
 
-The post-generation step creates one starter test per API module in
-`test/unit/`. Flesh them out using the mock server:
+The template ships reflection-driven surface tests that already cover the
+whole generated surface (every model decodes, every operation round-trips
+against a mock server), which is what makes the 90% coverage floor pass out
+of the box. For behavior-specific coverage, flesh out the per-module starter
+tests in `test/unit/` using the mock server:
 
 ```elixir
 test "gets a user", %{bypass: bypass, conn: conn} do
@@ -86,17 +89,15 @@ test "gets a user", %{bypass: bypass, conn: conn} do
 end
 ```
 
-Then raise the coverage bar in `coveralls.json`:
-
-```json
-{ "coverage_options": { "minimum_coverage": 80 } }
-```
+The coverage floor lives in `coveralls.json` (`minimum_coverage: 90`);
+raise it further as hand-written tests grow.
 
 ## Step 5: Configure GitHub Actions
 
-Add the `HEX_API_KEY` secret (Settings → Secrets → Actions) — get it from
-`mix hex.user auth`. See `.github/workflows/README.md` for the full workflow
-documentation.
+Add the `HEX_API_KEY` secret: create a key at hex.pm → Dashboard → Keys with
+`api:write` permission, then `gh secret set HEX_API_KEY`. (Hex ≥ 2.5 removed
+`mix hex.user key generate` — keys are created in the browser now.) See
+`.github/workflows/README.md` for the full workflow documentation.
 
 ## Step 6: Make Your First Release
 
@@ -107,7 +108,22 @@ Releases are automated with git_ops + conventional commits:
 2. Run the **Release** workflow from the Actions tab. The first run tags the
    current `@version`; later runs derive the bump from commit history,
    update CHANGELOG.md, tag, and trigger publishing to Hex.pm
-3. Or locally: `mix git_ops.release`, then `git push --follow-tags`
+3. Or locally — the **first** release must tag manually (mirroring the
+   workflow):
+
+   ```bash
+   git tag -a "v$(grep -E '^\s*@version "' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')" -m "First release"
+   git push --follow-tags
+   ```
+
+   Every release after that: `mix git_ops.release`, then
+   `git push --follow-tags`.
+
+   > **Why not `mix git_ops.release --initial`?** It refuses to run when
+   > CHANGELOG.md already exists (and setup writes one), while plain
+   > `git_ops.release` with zero tags fails with a confusing blank-tag
+   > error ("The tag  was found in the tag list but does not exist
+   > locally"). Manual first tag avoids both.
 
 Before releasing, run the full quality gate locally:
 
@@ -166,6 +182,13 @@ mix sbom
 ```
 
 ## Common Tasks
+
+### Fix a Defect in the Upstream Spec
+
+Don't edit `openapi-spec.yaml` by hand — spec-sync would reintroduce the
+defect on its next run. Add an executable, idempotent patch script to
+`spec-patches/` instead (see `spec-patches/README.md`); it is applied after
+every download and before every regeneration.
 
 ### Update API from New Spec
 

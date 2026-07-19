@@ -203,6 +203,11 @@ apply_config() {
     exit 1
   fi
 
+  # Apply any local spec patches (see spec-patches/README.md)
+  if [[ -x "$SCRIPT_DIR/apply-spec-patches.sh" ]]; then
+    "$SCRIPT_DIR/apply-spec-patches.sh" "$PROJECT_ROOT/openapi-spec.yaml"
+  fi
+
   local generator_config="$PROJECT_ROOT/generator-config.yaml"
   local pkg desc user repo license lib_dir
   pkg=$(escape_replacement "$PACKAGE_NAME")
@@ -458,6 +463,62 @@ cleanup_template_artifacts() {
     rm -rf "$setup_skill_dir"
     echo_info "Removed template-only skill: /setup-sdk (the /regenerate skill remains)"
   fi
+
+  # A bom.cdx.json inherited from the template describes the template's
+  # project, not this SDK — the first regeneration writes a fresh one.
+  if [[ -f "$PROJECT_ROOT/bom.cdx.json" ]]; then
+    rm -f "$PROJECT_ROOT/bom.cdx.json"
+    echo_info "Removed stale template SBOM (regenerated on first ./scripts/regenerate.sh)"
+  fi
+}
+
+# Substitute the real package name into the commented configuration examples
+# so config/*.exs never contradicts the appended real configuration.
+personalize_config_examples() {
+  local f
+  for f in "$PROJECT_ROOT"/config/dev.exs "$PROJECT_ROOT"/config/test.exs "$PROJECT_ROOT"/config/runtime.exs; do
+    if [[ -f "$f" ]] && grep -q 'your_package_name' "$f"; then
+      sed -i.bak "s/your_package_name/$PACKAGE_NAME/g" "$f"
+      rm -f "$f.bak"
+    fi
+  done
+  echo_info "Personalized configuration examples in config/*.exs"
+}
+
+# Setup is one-shot: once the placeholders are replaced it permanently
+# refuses to run again, so leaving its machinery and tombstone comments
+# behind only confuses contributors. Remove them — this runs LAST, and the
+# script deleting itself is safe because bash has already parsed it.
+remove_setup_machinery() {
+  # Strip the setup section from CONTRIBUTING.md (everything from the
+  # "### Setup Script" heading up to, but not including, the next heading)
+  if [[ -f "$PROJECT_ROOT/CONTRIBUTING.md" ]] && grep -q '^### Setup Script' "$PROJECT_ROOT/CONTRIBUTING.md"; then
+    sed -i.bak '/^### Setup Script$/,/^### Regenerate Script$/{/^### Regenerate Script$/!d;}' "$PROJECT_ROOT/CONTRIBUTING.md"
+    rm -f "$PROJECT_ROOT/CONTRIBUTING.md.bak"
+  fi
+
+  # Remove "(will be replaced by setup.sh)"-style tombstones
+  sed -i.bak \
+    -e 's/ (will be replaced by setup\.sh)//g' \
+    -e 's/ (will be replaced by setup\.sh;/ (defaults:/g' \
+    -e 's/The lib\/ path is filled in by scripts\/setup\.sh (underscored module name)\./The lib\/ path follows the underscored module namespace./g' \
+    "$PROJECT_ROOT/generator-config.yaml"
+  rm -f "$PROJECT_ROOT/generator-config.yaml.bak"
+
+  # Remove the post-setup placeholder comment from AGENTS.md
+  if [[ -f "$PROJECT_ROOT/AGENTS.md" ]]; then
+    sed -i.bak '/^<!-- After setup:/,/-->$/d' "$PROJECT_ROOT/AGENTS.md"
+    rm -f "$PROJECT_ROOT/AGENTS.md.bak"
+  fi
+
+  # Remove the setup config example and its protection entry
+  rm -f "$PROJECT_ROOT/setup.example.json"
+  sed -i.bak '/^setup\.example\.json$/d' "$PROJECT_ROOT/.openapi-generator-ignore"
+  rm -f "$PROJECT_ROOT/.openapi-generator-ignore.bak"
+
+  # Finally, remove this script
+  rm -f "$SCRIPT_DIR/setup.sh"
+  echo_info "Removed one-shot setup machinery (setup.sh, setup.example.json, tombstone comments)"
 }
 
 # Point git at the versioned hooks directory (pre-commit keeps the SBOM in
@@ -506,9 +567,13 @@ main() {
 
   validate_config
   apply_config
+  personalize_config_examples
   reset_sdk_docs
   enable_workflows
   cleanup_template_artifacts
+  # Must run before init_git so a fresh repo's initial commit doesn't
+  # include the one-shot setup machinery
+  remove_setup_machinery
   init_git
   configure_git_hooks
 

@@ -70,7 +70,7 @@ jobs:
       - name: Run release
         run: |
           if [ -z "$(git tag --list 'v*')" ]; then
-            VERSION=$(grep -m1 '@version' mix.exs | sed -E 's/.*"([^"]+)".*/\1/')
+            VERSION=$(grep -E '^\s*@version "' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
             echo "No previous release tag — tagging current version v$VERSION"
             git tag -a "v$VERSION" -m "Release v$VERSION"
           else

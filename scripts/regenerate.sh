@@ -63,6 +63,14 @@ check_generator() {
   exit 1
 }
 
+# Apply local spec patches (durable fixes for upstream spec defects; see
+# spec-patches/README.md)
+apply_spec_patches() {
+  if [[ -x "$SCRIPT_DIR/apply-spec-patches.sh" ]]; then
+    "$SCRIPT_DIR/apply-spec-patches.sh" "$OPENAPI_SPEC"
+  fi
+}
+
 # Validate OpenAPI spec
 validate_spec() {
   echo_step "Validating OpenAPI specification..."
@@ -120,7 +128,7 @@ sync_package_version() {
   fi
 
   local current_version
-  current_version=$(grep -m1 '@version' "$mix_file" | sed -E 's/.*"([^"]+)".*/\1/')
+  current_version=$(grep -E '^[[:space:]]*@version "' "$mix_file" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
 
   if [[ -n "$current_version" ]]; then
     sed -i.bak -E "s|^([[:space:]]*packageVersion:[[:space:]]*\").*(\")|\1$current_version\2|" "$GENERATOR_CONFIG"
@@ -275,6 +283,7 @@ main() {
   echo ""
 
   check_generator
+  apply_spec_patches
   validate_spec
   backup_generated
   sync_package_version

@@ -189,6 +189,51 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /users/{userId}/avatar:
+    post:
+      tags:
+        - users
+      summary: Upload a user avatar
+      description: |
+        Uploads an avatar image for the user. Exercises multipart request
+        building (file + form fields), which real-world specs rely on.
+      operationId: uploadUserAvatar
+      parameters:
+        - name: userId
+          in: path
+          description: User ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The avatar image file
+                purpose:
+                  type: string
+                  description: Intended use of the uploaded image
+      responses:
+        '200':
+          description: Avatar uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /posts:
     get:
       tags:

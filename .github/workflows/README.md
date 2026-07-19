@@ -91,8 +91,11 @@ rm template-smoke.yml
 ### release.yml
 
 - **Trigger**: manual dispatch (Actions tab → Release → Run workflow)
-- First release: tags the current `@version` from mix.exs. Subsequent
-  releases: runs `mix git_ops.release` — the version bump is derived from
+- First release: tags the current `@version` from mix.exs (never
+  `git_ops.release --initial`, which refuses to run when CHANGELOG.md
+  exists; plain `git_ops.release` with zero tags fails with a confusing
+  blank-tag error — do the same manual tag when releasing locally).
+  Subsequent releases: runs `mix git_ops.release` — the version bump is derived from
   conventional commits since the last tag (`fix:` → patch, `feat:` → minor,
   `!`/`BREAKING CHANGE` → major), `@version` and CHANGELOG.md are updated,
   and the release commit is tagged
@@ -104,7 +107,12 @@ rm template-smoke.yml
 ### publish.yml
 
 - **Trigger**: version tags (`v*.*.*`) or manual dispatch
-- **Requirements**: `HEX_API_KEY` secret (get it from `mix hex.user auth`)
+- **Requirements**: `HEX_API_KEY` secret. Hex ≥ 2.5 removed
+  `mix hex.user key generate` (user auth is an OAuth device flow now), so
+  create the key in the browser instead: hex.pm → Dashboard → Keys → new key
+  with `api:write` permission, then `gh secret set HEX_API_KEY`.
+  (Organization keys can still be generated with
+  `mix hex.organization key <org> generate`.)
 - Verifies the tag matches `@version` in `mix.exs`, runs tests, publishes to
   Hex.pm, and creates a GitHub release with the CycloneDX SBOM
   (`bom.cdx.json`) attached
@@ -122,7 +130,8 @@ rm template-smoke.yml
 ## Configuration Required
 
 1. **Repository secrets** (Settings → Secrets → Actions):
-   - `HEX_API_KEY` — required by publish.yml
+   - `HEX_API_KEY` — required by publish.yml (create at hex.pm → Dashboard →
+     Keys with `api:write`; see publish.yml notes above)
 2. **Branch protection** (recommended): require status checks before merging
 
 ## Troubleshooting

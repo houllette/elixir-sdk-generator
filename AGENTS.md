@@ -33,7 +33,7 @@ overview" section below. For ongoing spec/template changes use the
 | Lint | `mix credo --strict` |
 | Type check | `mix dialyzer` |
 | Generate/refresh the SBOM | `mix sbom` (writes `bom.cdx.json`) |
-| Cut a release (version + changelog + tag) | `mix git_ops.release` (or the Release workflow) |
+| Cut a release (version + changelog + tag) | `mix git_ops.release` (or the Release workflow) — **first release ever**: tag manually (`git tag -a v0.1.0`); `git_ops.release` needs a previous tag and `--initial` conflicts with the existing CHANGELOG.md |
 | Publish to Hex.pm | `./scripts/publish.sh` |
 
 ## The golden rule: generated vs. persistent files
@@ -43,7 +43,8 @@ overview" section below. For ongoing spec/template changes use the
 belongs in one of the persistent sources:
 
 - `openapi-spec.yaml` — the API contract (or its upstream source recorded in
-  `.spec-source`)
+  `.spec-source`); fix upstream spec defects with idempotent scripts in
+  `spec-patches/`, never by hand-editing the spec (spec-sync re-downloads it)
 - `.openapi-generator/templates/` — the COMPLETE vendored Mustache template
   set (the elixir generator does not fall back to built-in templates, so
   never delete files from this directory; see `generator-config.yaml` for

@@ -72,23 +72,73 @@ jobs:
 
       # The SBOM (bom.cdx.json) is committed and kept in sync by the
       # pre-commit hook; this check catches drift (e.g. dep changes committed
-      # with hooks disabled). Timestamp and serial number are excluded from
-      # the comparison — they change on every generation.
+      # with hooks disabled). Only fields deterministically derived from
+      # mix.exs/mix.lock are compared (root component + pkg:hex components +
+      # pruned dependency graph): mix sbom enriches metadata from the hex.pm
+      # API (network-dependent) and OTP system components carry the versions
+      # of whichever Erlang build generated the bom, so neither can compare
+      # stably between machines. The committed SBOM stays the enriched copy
+      # produced locally by the pre-commit hook.
       - name: Verify SBOM is up to date
         run: |
           cp bom.cdx.json /tmp/committed-bom.json
-          MIX_ENV=dev mix sbom
+          # The hex.pm metadata fetch can crash mix sbom on a slow response
+          # (5s task timeout inside the fetcher) — retry transient failures.
+          for attempt in 1 2 3; do
+            if MIX_ENV=dev mix sbom; then break; fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::mix sbom failed after 3 attempts"
+              exit 1
+            fi
+            echo "mix sbom failed (attempt $attempt) — retrying"
+            sleep 10
+          done
           python3 - <<'PY'
-          import json, sys
+          import difflib, json, sys
+
+          KEEP = {"bom-ref", "type", "name", "version", "purl", "scope", "hashes"}
+
+          def prune(component):
+              return {k: v for k, v in component.items() if k in KEEP}
 
           def normalize(path):
               with open(path) as f:
                   bom = json.load(f)
-              bom.pop("serialNumber", None)
-              bom.get("metadata", {}).pop("timestamp", None)
-              return bom
+              root = prune(bom.get("metadata", {}).get("component", {}))
+              components = [
+                  prune(c)
+                  for c in bom.get("components", [])
+                  if (c.get("purl") or "").startswith("pkg:hex/")
+              ]
+              kept_refs = {c.get("bom-ref") for c in components} | {root.get("bom-ref")}
+              dependencies = [
+                  {
+                      "ref": d.get("ref"),
+                      "dependsOn": sorted(r for r in d.get("dependsOn", []) if r in kept_refs),
+                  }
+                  for d in bom.get("dependencies", [])
+                  if d.get("ref") in kept_refs
+              ]
+              return {
+                  "root": root,
+                  "components": sorted(
+                      components,
+                      key=lambda c: (c.get("purl") or c.get("name", ""), c.get("version", "")),
+                  ),
+                  "dependencies": sorted(dependencies, key=lambda d: d["ref"] or ""),
+              }
 
-          if normalize("/tmp/committed-bom.json") != normalize("bom.cdx.json"):
+          committed = normalize("/tmp/committed-bom.json")
+          fresh = normalize("bom.cdx.json")
+          if committed != fresh:
+              diff = difflib.unified_diff(
+                  json.dumps(committed, indent=2, sort_keys=True).splitlines(),
+                  json.dumps(fresh, indent=2, sort_keys=True).splitlines(),
+                  fromfile="committed bom.cdx.json",
+                  tofile="freshly generated bom.cdx.json",
+                  lineterm="",
+              )
+              print("\n".join(diff))
               print("::error::bom.cdx.json is out of date. Run 'mix sbom' and commit the result")
               print("::error::(or enable the versioned hooks: git config core.hooksPath .githooks).")
               sys.exit(1)
