@@ -1,5 +1,8 @@
 # Elixir SDK Generator
 
+[![Template Smoke Test](https://github.com/houllette/elixir-sdk-generator/actions/workflows/template-smoke.yml/badge.svg)](https://github.com/houllette/elixir-sdk-generator/actions/workflows/template-smoke.yml)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 **Point this template at an OpenAPI spec and get a production-ready, self-maintaining Elixir SDK.**
 
 One setup script turns this repo into a typed Elixir client for your API — with connection pooling, safe retries, tests, CI, release automation, and an SBOM already wired up. When your API changes, one command (or a weekly bot) regenerates the client.

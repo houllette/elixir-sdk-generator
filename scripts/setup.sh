@@ -266,7 +266,7 @@ reset_sdk_docs() {
 
   echo_info "Fresh-initializing SDK docs (README, CHANGELOG, LICENSE)..."
 
-  local year sdk_description base_url_line
+  local year sdk_description base_url_line license_badge_text
   year=$(date +%Y)
   sdk_description="${DESCRIPTION:-Elixir client for the $GIT_REPO API}"
 
@@ -275,6 +275,13 @@ reset_sdk_docs() {
   else
     base_url_line="  base_url: System.get_env(\"API_BASE_URL\")"
   fi
+
+  # shields.io static badges use '-' as a separator and '_' as a space:
+  # literal dashes/underscores in the label must be doubled
+  # (Apache-2.0 -> Apache--2.0, my_pkg -> my__pkg)
+  local pkg_badge_text
+  license_badge_text=$(printf '%s' "$LICENSE_ID" | sed -e 's/-/--/g' -e 's/_/__/g' -e 's/ /%20/g')
+  pkg_badge_text=$(printf '%s' "$PACKAGE_NAME" | sed -e 's/_/__/g')
 
   # CHANGELOG: fresh, with the git_ops marker used by release automation
   cat > "$PROJECT_ROOT/CHANGELOG.md" <<EOF
@@ -301,6 +308,11 @@ EOF
   # after the first generation.
   cat > "$PROJECT_ROOT/README.md" <<EOF
 # $PACKAGE_NAME
+
+[![Hex.pm](https://img.shields.io/hexpm/v/$PACKAGE_NAME.svg)](https://hex.pm/packages/$PACKAGE_NAME)
+[![Documentation](https://img.shields.io/badge/hexdocs-$pkg_badge_text-blue.svg)](https://hexdocs.pm/$PACKAGE_NAME)
+[![CI](https://github.com/$GIT_USER/$GIT_REPO/actions/workflows/test.yml/badge.svg)](https://github.com/$GIT_USER/$GIT_REPO/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/license-$license_badge_text-green.svg)](LICENSE)
 
 $sdk_description
 

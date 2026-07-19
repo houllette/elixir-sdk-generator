@@ -175,4 +175,8 @@ jobs:
             echo "::error::README.md module-namespace placeholder was not filled by post-generate"
             exit 1
           fi
+          if ! grep -q 'img.shields.io' README.md; then
+            echo "::error::Fresh README.md should include the badge row"
+            exit 1
+          fi
           echo "All expected files generated; docs fresh-initialized; template-only artifacts cleaned up."

@@ -48,9 +48,11 @@ You'll be asked for:
   workflow that opens a PR when the upstream spec changes.
 - **License**: SPDX id, default `MIT`
 
-Setup fresh-initializes your SDK's release files (README, CHANGELOG with the
-release-automation marker, LICENSE — starting your SDK's history at zero
-instead of inheriting the template's), enables the GitHub Actions workflows,
+Setup fresh-initializes your SDK's release files (README with a badge row —
+Hex version, docs, CI, license — CHANGELOG with the release-automation
+marker, and LICENSE, starting your SDK's history at zero instead of
+inheriting the template's; the Hex badges activate on your first publish),
+enables the GitHub Actions workflows,
 and removes template-only artifacts (QUICKSTART.md, the smoke-test workflow,
 and the one-shot `/setup-sdk` skill). In Claude Code you can run the
 `/setup-sdk` skill instead — it automates this step and the next, then cleans

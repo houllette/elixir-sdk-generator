@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README rewritten around the three-step usage flow; configuration detail
   moved to QUICKSTART.md
 - **Setup fresh-initializes SDK release files**: README (with real package
-  details; module namespace filled in by the first generation), CHANGELOG
+  details, a badge row — Hex version/docs/CI/license — and the module
+  namespace filled in by the first generation), CHANGELOG
   (fresh, with the git_ops marker), and LICENSE (SDK owner's copyright) are
   reset by `setup.sh` so new SDKs start their history at zero instead of
   inheriting the template's (`--keep-template-docs` opts out);
