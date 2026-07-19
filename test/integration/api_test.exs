@@ -1,139 +1,108 @@
 defmodule ApiIntegrationTest do
   @moduledoc """
-  Integration tests for API operations.
+  Integration tests for the HTTP test harness.
 
-  These tests use Bypass to create a mock HTTP server and test
-  the full request/response cycle.
+  These tests use Bypass (via `MockServer`) and a Tesla + Finch client stack
+  that mirrors what the generated SDK uses, proving the full
+  request/response cycle works before and after SDK generation.
 
-  NOTE: Update these tests after generating your SDK with actual API operations.
+  After generating your SDK, add tests for its actual API operations. The
+  post-generation script creates a starter test per API module in
+  `test/unit/`, and the pattern looks like:
+
+      test "gets a user", %{bypass: bypass} do
+        MockServer.expect_get(bypass, "/users/1", 200, %{id: 1})
+        conn = MySDK.Connection.new(base_url: MockServer.url(bypass))
+        assert {:ok, %MySDK.Model.User{id: 1}} = MySDK.Api.Users.get_user(conn, 1)
+      end
   """
 
   use TestCase
 
-  # TODO: After generation, replace with your actual module names
-  # alias YourSDK.Connection
-  # alias YourSDK.Api.SomeApi
-
   setup do
     bypass = MockServer.setup()
-    {:ok, bypass: bypass}
+    start_supervised!({Finch, name: ApiIntegrationTest.Finch})
+
+    client =
+      Tesla.client(
+        [
+          {Tesla.Middleware.BaseUrl, MockServer.url(bypass)},
+          Tesla.Middleware.EncodeJson,
+          Tesla.Middleware.DecodeJson
+        ],
+        {Tesla.Adapter.Finch, name: ApiIntegrationTest.Finch}
+      )
+
+    {:ok, bypass: bypass, client: client}
   end
 
-  describe "API operations" do
-    test "successful GET request", %{bypass: bypass} do
-      # Example test structure - implement after generation
+  describe "GET requests" do
+    test "returns decoded response body", %{bypass: bypass, client: client} do
       MockServer.expect_get(bypass, "/users/1", 200, %{
         id: 1,
         name: "Test User",
         email: "test@example.com"
       })
 
-      # After generation, uncomment and update:
-      # conn = Connection.new(base_url: MockServer.url(bypass))
-      # assert {:ok, response} = SomeApi.get_user(conn, 1)
-      # assert response.status == 200
-      # assert response.body["id"] == 1
-
-      assert true
+      assert {:ok, response} = Tesla.get(client, "/users/1")
+      assert response.status == 200
+      assert response.body["id"] == 1
+      assert response.body["name"] == "Test User"
     end
 
-    test "successful POST request", %{bypass: bypass} do
-      MockServer.expect_post(bypass, "/users", 201, %{
-        id: 2,
-        name: "New User"
-      })
+    test "propagates error statuses", %{bypass: bypass, client: client} do
+      MockServer.expect_get(bypass, "/users/999", 404, %{error: "Not found"})
 
-      # After generation, implement actual test
-      # conn = Connection.new(base_url: MockServer.url(bypass))
-      # assert {:ok, response} = SomeApi.create_user(conn, %{name: "New User"})
-      # assert response.status == 201
-
-      assert true
+      assert {:ok, response} = Tesla.get(client, "/users/999")
+      assert response.status == 404
+      assert response.body["error"] == "Not found"
     end
 
-    test "handles 404 error", %{bypass: bypass} do
-      MockServer.expect_get(bypass, "/users/999", 404, %{
-        error: "Not found"
-      })
-
-      # After generation, implement actual test
-      # conn = Connection.new(base_url: MockServer.url(bypass))
-      # assert {:ok, response} = SomeApi.get_user(conn, 999)
-      # assert response.status == 404
-
-      assert true
-    end
-
-    test "handles 500 error", %{bypass: bypass} do
+    test "handles 500 responses", %{bypass: bypass, client: client} do
       MockServer.expect_error(bypass, 500)
 
-      # After generation, implement actual test
-      # conn = Connection.new(base_url: MockServer.url(bypass))
-      # assert {:ok, response} = SomeApi.get_user(conn, 1)
-      # assert response.status == 500
-
-      assert true
-    end
-
-    test "retries on timeout", %{bypass: bypass} do
-      # Test retry logic
-      Bypass.expect(bypass, fn conn ->
-        # Simulate timeout by not responding
-        Process.sleep(1000)
-        Plug.Conn.resp(conn, 200, "")
-      end)
-
-      # After generation, implement actual test with retry verification
-      assert true
-    end
-
-    test "respects custom timeout", %{bypass: bypass} do
-      MockServer.expect_get(bypass, "/users/1", 200, %{id: 1})
-
-      # After generation, test with custom timeout
-      # conn = Connection.new(base_url: MockServer.url(bypass), timeout: 100)
-      # Test that timeout is respected
-
-      assert true
+      assert {:ok, response} = Tesla.get(client, "/anything")
+      assert response.status == 500
     end
   end
 
-  describe "authentication" do
-    test "includes authentication headers", %{bypass: bypass} do
-      Bypass.expect_once(bypass, "GET", "/users/1", fn conn ->
-        # Verify authentication headers are present
-        assert Plug.Conn.get_req_header(conn, "authorization") != []
+  describe "POST requests" do
+    test "encodes request body as JSON", %{bypass: bypass, client: client} do
+      Bypass.expect_once(bypass, "POST", "/users", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert JSON.decode!(body) == %{"name" => "New User"}
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{id: 1}))
+        |> Plug.Conn.resp(201, JSON.encode!(%{id: 2, name: "New User"}))
       end)
 
-      # After generation, implement with actual auth
-      assert true
+      assert {:ok, response} = Tesla.post(client, "/users", %{name: "New User"})
+      assert response.status == 201
+      assert response.body["id"] == 2
     end
   end
 
   describe "error handling" do
-    test "handles network errors gracefully", %{bypass: bypass} do
+    test "returns an error tuple when the server is down", %{bypass: bypass, client: client} do
       Bypass.down(bypass)
 
-      # After generation, test network error handling
-      # conn = Connection.new(base_url: MockServer.url(bypass))
-      # assert {:error, _reason} = SomeApi.get_user(conn, 1)
+      assert {:error, _reason} = Tesla.get(client, "/users/1")
+    end
+  end
 
-      assert true
+  describe "fixtures" do
+    test "fixture data merges custom attributes" do
+      user = Fixtures.fixture(:user, %{name: "Custom"})
+
+      assert user.name == "Custom"
+      assert user.email == "test@example.com"
     end
 
-    test "handles malformed JSON responses", %{bypass: bypass} do
-      Bypass.expect_once(bypass, "GET", "/users/1", fn conn ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, "not valid json")
-      end)
+    test "fixture_list generates sequential ids" do
+      users = Fixtures.fixture_list(:user, 3)
 
-      # After generation, test malformed response handling
-      assert true
+      assert Enum.map(users, & &1.id) == [1, 2, 3]
     end
   end
 end

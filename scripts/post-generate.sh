@@ -31,6 +31,17 @@ fix_generated_code() {
   echo_info "Code fixes applied."
 }
 
+# Detect the installed OpenAPI Generator version
+generator_version() {
+  if command -v openapi-generator &> /dev/null; then
+    openapi-generator version 2>/dev/null || echo "unknown"
+  elif command -v npx &> /dev/null; then
+    npx @openapitools/openapi-generator-cli version 2>/dev/null || echo "unknown"
+  else
+    echo "unknown"
+  fi
+}
+
 # Update .openapi-generator/VERSION file
 update_version_file() {
   local version_file="$PROJECT_ROOT/.openapi-generator/VERSION"
@@ -42,7 +53,7 @@ update_version_file() {
   # Record the generator version and timestamp
   {
     echo "Generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    echo "OpenAPI Generator version: $(npx @openapitools/openapi-generator-cli version 2>/dev/null || echo 'unknown')"
+    echo "OpenAPI Generator version: $(generator_version)"
     echo "Spec file: openapi-spec.yaml"
   } > "$version_file"
 
@@ -56,38 +67,30 @@ ensure_test_structure() {
   mkdir -p "$PROJECT_ROOT/test/unit"
   mkdir -p "$PROJECT_ROOT/test/integration"
   mkdir -p "$PROJECT_ROOT/test/support"
-
-  # Create .gitkeep files if directories are empty
-  for dir in unit integration support; do
-    if [[ -z "$(ls -A "$PROJECT_ROOT/test/$dir" 2>/dev/null)" ]]; then
-      touch "$PROJECT_ROOT/test/$dir/.gitkeep"
-    fi
-  done
+  mkdir -p "$PROJECT_ROOT/test/fixtures"
 
   echo_info "Test structure verified."
 }
 
-# Check for API changes that need new tests
-check_test_coverage() {
-  echo_info "Analyzing API coverage..."
+# Report the module name the generator derived, so users know what to alias.
+# Also fills the YourSDK placeholder that setup.sh leaves in the README (the
+# real namespace is only known after the first generation).
+report_module_name() {
+  local connection_file
+  connection_file=$(find "$PROJECT_ROOT/lib" -name "connection.ex" 2>/dev/null | head -1)
 
-  local lib_dir="$PROJECT_ROOT/lib"
-  local test_dir="$PROJECT_ROOT/test"
+  if [[ -n "$connection_file" ]]; then
+    local module_base
+    module_base=$(grep -m1 "^defmodule " "$connection_file" | sed -E 's/defmodule ([A-Za-z0-9_.]+)\.Connection do/\1/')
+    if [[ -n "$module_base" ]]; then
+      echo_info "Generated SDK module namespace: $module_base"
 
-  if [[ ! -d "$lib_dir" ]]; then
-    echo_warn "lib/ directory not found, skipping coverage check."
-    return 0
-  fi
-
-  # Count API modules
-  local api_count
-  api_count=$(find "$lib_dir" -name "*_api.ex" -o -name "*api.ex" | wc -l)
-
-  echo_info "Found $api_count API modules"
-
-  if [[ $api_count -gt 0 ]]; then
-    echo_warn "Remember to add tests for new API endpoints!"
-    echo_warn "Run 'mix test --cover' to check test coverage."
+      if [[ -f "$PROJECT_ROOT/README.md" ]] && grep -q "YourSDK" "$PROJECT_ROOT/README.md"; then
+        sed -i.bak "s/YourSDK/$module_base/g" "$PROJECT_ROOT/README.md"
+        rm -f "$PROJECT_ROOT/README.md.bak"
+        echo_info "Filled SDK module namespace into README.md"
+      fi
+    fi
   fi
 }
 
@@ -95,27 +98,27 @@ check_test_coverage() {
 generate_test_templates() {
   echo_info "Checking for new API modules without tests..."
 
-  local lib_dir="$PROJECT_ROOT/lib"
+  local api_dir
+  api_dir=$(find "$PROJECT_ROOT/lib" -type d -name "api" 2>/dev/null | head -1)
   local test_unit_dir="$PROJECT_ROOT/test/unit"
 
-  if [[ ! -d "$lib_dir" ]]; then
+  if [[ -z "$api_dir" ]]; then
     return 0
   fi
 
-  # Find API files
-  find "$lib_dir" -type f -name "*_api.ex" | while read -r api_file; do
+  find "$api_dir" -type f -name "*.ex" | while read -r api_file; do
     local basename
     basename=$(basename "$api_file" .ex)
-    local test_file="$test_unit_dir/${basename}_test.exs"
+    local test_file="$test_unit_dir/${basename}_api_test.exs"
 
     # Skip if test already exists
     if [[ -f "$test_file" ]]; then
       continue
     fi
 
-    # Extract module name from file
+    # Extract module name from file (e.g. MySDK.Api.Users)
     local module_name
-    module_name=$(grep -m1 "defmodule" "$api_file" | sed 's/defmodule \(.*\) do/\1/')
+    module_name=$(grep -m1 "^defmodule " "$api_file" | sed -E 's/defmodule ([A-Za-z0-9_.]+) do/\1/')
 
     if [[ -z "$module_name" ]]; then
       continue
@@ -125,18 +128,26 @@ generate_test_templates() {
 
     cat > "$test_file" <<EOF
 defmodule ${module_name}Test do
-  use ExUnit.Case, async: true
-  use ${module_name%.*}.TestCase
+  use TestCase, async: true
 
   alias ${module_name}
+  alias ${module_name%%.*}.Connection
 
-  describe "${basename}" do
-    # TODO: Add tests for each API operation
-    test "placeholder - remove this and add real tests" do
-      # This is a placeholder test to maintain code coverage
-      # Add real tests for each API operation in this module
-      assert true
-    end
+  setup do
+    bypass = MockServer.setup()
+    conn = Connection.new(base_url: MockServer.url(bypass))
+    {:ok, bypass: bypass, conn: conn}
+  end
+
+  # Add tests for each operation in ${module_name}, for example:
+  #
+  #   test "lists things", %{bypass: bypass, conn: conn} do
+  #     MockServer.expect_get(bypass, "/things", 200, %{things: []})
+  #     assert {:ok, _response} = ${module_name##*.}.list_things(conn)
+  #   end
+
+  test "module is generated and loaded" do
+    assert Code.ensure_loaded?(${module_name##*.})
   end
 end
 EOF
@@ -151,7 +162,7 @@ main() {
   fix_generated_code
   update_version_file
   ensure_test_structure
-  check_test_coverage
+  report_module_name
   generate_test_templates
 
   echo_info "Post-generation processing complete."

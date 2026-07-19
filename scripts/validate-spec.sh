@@ -82,20 +82,23 @@ validate_openapi_structure() {
 validate_with_generator() {
   echo_info "Validating with OpenAPI Generator..."
 
-  local validator=""
-
-  # Try npx
-  if command -v npx &> /dev/null; then
-    validator="npx @openapitools/openapi-generator-cli validate"
-  # Try docker
+  if command -v openapi-generator &> /dev/null; then
+    if openapi-generator validate -i "$OPENAPI_SPEC" 2>&1; then
+      echo_info "OpenAPI Generator validation passed"
+      return 0
+    else
+      echo_error "OpenAPI Generator validation failed"
+      return 1
+    fi
+  elif command -v npx &> /dev/null; then
+    if npx @openapitools/openapi-generator-cli validate -i "$OPENAPI_SPEC" 2>&1; then
+      echo_info "OpenAPI Generator validation passed"
+      return 0
+    else
+      echo_error "OpenAPI Generator validation failed"
+      return 1
+    fi
   elif command -v docker &> /dev/null; then
-    validator="docker run --rm -v \"${PROJECT_ROOT}:/local\" openapitools/openapi-generator-cli validate"
-  else
-    echo_warn "OpenAPI Generator not found, skipping validation"
-    return 0
-  fi
-
-  if [[ "$validator" == *"docker"* ]]; then
     if docker run --rm -v "${PROJECT_ROOT}:/local" openapitools/openapi-generator-cli validate -i /local/openapi-spec.yaml 2>&1; then
       echo_info "OpenAPI Generator validation passed"
       return 0
@@ -104,13 +107,8 @@ validate_with_generator() {
       return 1
     fi
   else
-    if eval "$validator -i \"$OPENAPI_SPEC\"" 2>&1; then
-      echo_info "OpenAPI Generator validation passed"
-      return 0
-    else
-      echo_error "OpenAPI Generator validation failed"
-      return 1
-    fi
+    echo_warn "OpenAPI Generator not found, skipping validation"
+    return 0
   fi
 }
 
@@ -127,7 +125,7 @@ check_common_issues() {
 
     if [[ "$path_count" == "0" ]]; then
       echo_warn "No paths defined in the spec"
-      ((warnings++))
+      warnings=$((warnings + 1))
     else
       echo_info "Found $path_count path(s)"
     fi
@@ -138,7 +136,7 @@ check_common_issues() {
 
     if [[ "$schema_count" == "0" ]]; then
       echo_warn "No schemas defined in components"
-      ((warnings++))
+      warnings=$((warnings + 1))
     else
       echo_info "Found $schema_count schema(s)"
     fi
@@ -158,10 +156,10 @@ main() {
 
   local errors=0
 
-  check_spec_exists || ((errors++))
-  validate_yaml_syntax || ((errors++))
-  validate_openapi_structure || ((errors++))
-  validate_with_generator || ((errors++))
+  check_spec_exists || errors=$((errors + 1))
+  validate_yaml_syntax || errors=$((errors + 1))
+  validate_openapi_structure || errors=$((errors + 1))
+  validate_with_generator || errors=$((errors + 1))
   check_common_issues
 
   echo ""

@@ -1,23 +1,31 @@
 # Elixir SDK Generator Template
 
-A production-ready GitHub template for generating Elixir SDKs from OpenAPI specifications using [openapi-generator](https://openapi-generator.tech/).
+A GitHub template for generating Elixir SDKs from OpenAPI specifications using [openapi-generator](https://openapi-generator.tech/).
 
 ## Features
 
 ✨ **Automated Generation**: One-command SDK generation with zero manual intervention
 🔄 **Auto-Regeneration**: GitHub Actions automatically regenerate SDK when specs change
 🏊 **Connection Pooling**: Built-in Finch connection pooling for optimal performance
-♻️ **Retry Logic**: Automatic retries with exponential backoff for transient failures
+♻️ **Retry Logic**: Automatic retries with exponential backoff (idempotent requests only)
 📊 **Telemetry**: Integrated telemetry for monitoring and observability
-🧪 **Test Infrastructure**: Comprehensive test helpers that survive regeneration
-📈 **Code Coverage**: Automatic coverage tracking with threshold enforcement
-🔍 **Breaking Changes**: Automatic detection of API breaking changes
+🧪 **Test Infrastructure**: Test helpers (Bypass mock server, Mox, fixtures) that survive regeneration
+📈 **Code Coverage**: Coverage tracking with a configurable threshold (via `coveralls.json`)
+🔍 **Breaking Changes**: Spec-level breaking change detection with [oasdiff](https://github.com/oasdiff/oasdiff)
 📦 **Hex.pm Ready**: Pre-configured publishing workflow
+🚀 **Git-ops Releases**: Conventional commits → automated version bump, changelog, tag, and publish (via [git_ops](https://hex.pm/packages/git_ops))
+🔄 **Spec Sync**: Weekly workflow checks your upstream spec URL and opens a PR when it changes
+🤖 **Agent-Ready**: AGENTS.md/CLAUDE.md, Claude Code permissions, and skills — `/setup-sdk` mints the SDK (and cleans itself up afterwards), `/regenerate` stays for maintenance
+✅ **Self-Testing**: The template repo runs its own end-to-end smoke test in CI
 
 ## Quick Start
 
-> **Prerequisites**: Elixir 1.18+, Erlang/OTP 26+, and OpenAPI Generator
-> Install OpenAPI Generator via: `brew install openapi-generator` (macOS/Linux) or `npm install -g @openapitools/openapi-generator-cli`
+> **Prerequisites**: Erlang/Elixir as pinned in `.tool-versions` (currently
+> Elixir 1.20.2 / OTP 29 — generated SDKs stay compatible down to Elixir 1.18),
+> Java 11+ (for OpenAPI Generator), and OpenAPI Generator itself:
+> `brew install openapi-generator` (macOS/Linux) or
+> `npm install -g @openapitools/openapi-generator-cli`.
+> `jq` is required only for non-interactive setup (`--config`).
 
 ### 1. Use This Template
 
@@ -26,15 +34,39 @@ Click the "Use this template" button on GitHub to create your own repository.
 ### 2. Run Setup
 
 ```bash
+# Interactive
 ./scripts/setup.sh
+
+# Non-interactive (see setup.example.json for the format)
+./scripts/setup.sh --config my-setup.json
+
+# Skip git initialization (e.g. in CI)
+./scripts/setup.sh --config my-setup.json --no-git
 ```
 
-This interactive script will prompt you for:
+Setup will ask for:
 - Package name (e.g., `my_api_client`)
-- Module name (e.g., `MyApiClient`)
-- Author information
+- Module namespace (optional PascalCase, e.g. `MyAPIClient`; defaults to the
+  camelized package name, e.g. `example_api` → `ExampleAPI`)
+- Description (optional; falls back to the spec's `info.description`)
 - GitHub repository details
-- OpenAPI specification location
+- API base URL (optional)
+- OpenAPI specification location (optional; keeps the bundled example
+  otherwise). **Provide a URL to enable the weekly spec-sync workflow** —
+  it gets recorded in `.spec-source`, and GitHub `/blob/` URLs are converted
+  to raw URLs automatically.
+- License SPDX id (default `MIT`)
+
+Setup **fresh-initializes the release-facing files for your SDK** — a new
+CHANGELOG.md (with the release-automation marker), a minimal README.md filled
+with your package details, a LICENSE with your name, and removal of
+template-only docs. Your SDK's history starts at zero rather than inheriting
+this template's. Opt out with `--keep-template-docs`.
+
+Alternatively, run the **`/setup-sdk`** skill in Claude Code — it interviews
+you and runs the whole setup + first generation + docs update flow. The skill
+is one-shot: setup removes it (along with the template smoke-test workflow)
+once your SDK exists, leaving only the `/regenerate` maintenance skill.
 
 ### 3. Generate SDK
 
@@ -42,42 +74,49 @@ This interactive script will prompt you for:
 ./scripts/regenerate.sh
 ```
 
-This will:
-- Validate your OpenAPI spec
-- Generate the SDK code
-- Run post-processing
-- Format the code
-- Install dependencies
-- Run tests
+This will validate your spec, generate the SDK, run post-processing (including
+starter test files for each API module), install dependencies, format the code,
+and run the tests.
 
 ### 4. Review and Test
 
 ```bash
-mix test
-mix credo
-mix dialyzer
+mix check      # unused deps, hex.audit, warnings-as-errors, format, credo --strict, tests
+mix dialyzer   # run separately (slow)
 ```
+
+All of these pass on a freshly generated SDK.
 
 ## Project Structure
 
 ```
 elixir-sdk-generator/
-├── .github/workflows/      # CI/CD pipelines
-│   ├── test.yml           # Test on every push
-│   ├── regenerate-sdk.yml # Auto-regenerate SDK
-│   ├── publish.yml        # Publish to Hex.pm
-│   └── breaking-changes.yml # Detect breaking changes
+├── .claude/                 # Claude Code permissions + skills:
+│                            #   /setup-sdk (one-shot, removed by setup.sh)
+│                            #   /regenerate (kept for SDK maintenance)
+├── AGENTS.md                # Agent guidance (CLAUDE.md points here)
+├── .github/workflows/       # CI/CD pipelines
+│   ├── template-smoke.yml   # End-to-end template test (template repo only;
+│   │                        #   removed by setup.sh)
+│   ├── test.yml.disabled    # Test on every push (enabled by setup.sh)
+│   ├── spec-sync.yml.disabled       # Weekly upstream spec check → PR
+│   ├── regenerate-sdk.yml.disabled  # Auto-regenerate SDK
+│   ├── publish.yml.disabled         # Publish to Hex.pm
+│   └── breaking-changes.yml.disabled # Detect breaking changes
 ├── .openapi-generator/
-│   └── templates/         # Custom Mustache templates
-├── config/                # Elixir configuration
-├── lib/                   # Generated SDK code (disposable)
-├── scripts/               # Automation scripts
-├── test/                  # Tests (persistent, never regenerated)
+│   └── templates/           # COMPLETE vendored template set (see below)
+├── config/                  # Elixir configuration
+├── lib/                     # Generated SDK code (disposable)
+├── scripts/                 # Automation scripts
+├── test/                    # Tests (persistent, never regenerated)
 │   ├── unit/
 │   ├── integration/
+│   ├── fixtures/
 │   └── support/
-├── generator-config.yaml  # OpenAPI Generator config
-└── openapi-spec.yaml     # Your OpenAPI specification
+├── coveralls.json           # Coverage threshold configuration
+├── generator-config.yaml    # OpenAPI Generator config
+├── setup.example.json       # Example config for non-interactive setup
+└── openapi-spec.yaml        # Your OpenAPI specification
 ```
 
 ## Usage
@@ -85,11 +124,11 @@ elixir-sdk-generator/
 ### Basic Example
 
 ```elixir
-# Create a connection
+# Create a connection (module namespace derived from your package name)
 conn = MySDK.Connection.new()
 
-# Make API calls
-{:ok, response} = MySDK.Api.Users.get_user(conn, user_id)
+# Make API calls — responses decode into typed model structs
+{:ok, %MySDK.Model.User{} = user} = MySDK.Api.Users.get_user(conn, user_id)
 ```
 
 ### Custom Configuration
@@ -102,13 +141,24 @@ conn = MySDK.Connection.new(base_url: "https://api.example.com")
 conn = MySDK.Connection.new(timeout: 60_000)
 
 # Custom retry configuration
-conn = MySDK.Connection.new(
-  retry: [
-    max_retries: 5,
-    delay: 200,
-    max_delay: 10_000
-  ]
-)
+conn = MySDK.Connection.new(retry: [max_retries: 5, delay: 200, max_delay: 10_000])
+
+# Disable retries
+conn = MySDK.Connection.new(retry: false)
+
+# Extra middleware
+conn = MySDK.Connection.new(middleware: [{Tesla.Middleware.Logger, []}])
+```
+
+### Retry Semantics
+
+Retries use exponential backoff and are **limited to idempotent HTTP methods**
+(GET, HEAD, OPTIONS, PUT, DELETE) on status 408/429/5xx or transport errors.
+POST requests are never retried automatically, so requests with side effects
+are never replayed. Override with a custom predicate:
+
+```elixir
+conn = MySDK.Connection.new(retry: [should_retry: fn result, env, _ctx -> ... end])
 ```
 
 ### Runtime Configuration
@@ -117,209 +167,103 @@ conn = MySDK.Connection.new(
 # config/runtime.exs
 config :my_sdk,
   base_url: System.get_env("API_BASE_URL", "https://api.example.com"),
-  pool_size: String.to_integer(System.get_env("HTTP_POOL_SIZE", "25"))
+  pool_size: String.to_integer(System.get_env("HTTP_POOL_SIZE", "25")),
+  pool_count: 1,
+  connect_timeout: 5_000
 ```
 
 ## Development Workflow
 
-### 1. Update OpenAPI Spec
+1. Edit `openapi-spec.yaml` with your API changes (or let the weekly
+   spec-sync workflow pull them from your recorded spec URL)
+2. Run `./scripts/regenerate.sh` — or the `/regenerate` skill in Claude Code,
+   which also reviews the diff, updates tests, and drafts the CHANGELOG entry
+3. Flesh out the starter tests created in `test/unit/` for new endpoints
+4. Commit and push
 
-Edit `openapi-spec.yaml` with your API changes.
+### Keeping up with an upstream spec
 
-### 2. Regenerate SDK
-
-```bash
-./scripts/regenerate.sh
-```
-
-### 3. Add Tests
-
-Add tests for new endpoints in `test/unit/` or `test/integration/`:
-
-```elixir
-defmodule MySDK.Api.UsersTest do
-  use TestCase
-
-  test "creates a user" do
-    conn = Connection.new(base_url: MockServer.url(bypass))
-    assert {:ok, response} = Users.create_user(conn, %{name: "Test"})
-  end
-end
-```
-
-### 4. Commit Changes
-
-```bash
-git add .
-git commit -m "Add user creation endpoint"
-git push
-```
+If setup recorded a spec URL in `.spec-source`, the **spec-sync** workflow
+checks it every Monday, regenerates when it changed, and opens a PR with an
+oasdiff changelog of the API changes. Run it on demand from the Actions tab.
 
 ## GitHub Actions Workflows
 
-### Continuous Integration (test.yml)
-
-Runs on every push and PR:
-- Tests across multiple Elixir/OTP versions
-- Code formatting checks
-- Credo linting
-- Dialyzer type checking
-- Code coverage with threshold enforcement
-
-### Auto-Regeneration (regenerate-sdk.yml)
-
-Automatically triggered when:
-- `openapi-spec.yaml` changes
-- Manual workflow dispatch
-- Weekly schedule (configurable)
-
-Creates a PR with regenerated SDK code.
-
-### Publishing (publish.yml)
-
-Triggered on version tags (`v*.*.*`):
-- Runs all tests
-- Publishes to Hex.pm
-- Creates GitHub release
-
-```bash
-# Bump version in mix.exs, then:
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-### Breaking Changes Detection (breaking-changes.yml)
-
-Runs on PRs that modify:
-- OpenAPI spec
-- API modules
-
-Detects and reports:
-- Breaking changes in API spec
-- Removed functions
-- Modified signatures
+Workflows ship disabled (`.disabled` suffix) so they don't run on the template
+repo; `./scripts/setup.sh` enables them and removes the template-only smoke
+test. See [.github/workflows/README.md](.github/workflows/README.md) for
+details, including the required `HEX_API_KEY` secret and a note about PR
+creation with `GITHUB_TOKEN` not triggering CI.
 
 ## Advanced Features
 
+### Attribution
+
+Generated files carry a header crediting OpenAPI Generator and this template,
+and the Hex package links include a "Generated with" entry. Please keep them —
+they help others find the tooling.
+
 ### Custom Templates
 
-Modify templates in `.openapi-generator/templates/` to customize generated code:
+`.openapi-generator/templates/` contains the **complete** template set for the
+elixir generator (vendored from openapi-generator 7.23.0, the latest release) —
+the elixir generator does not fall back to built-in templates when
+`templateDir` is set, so partial template directories do not work. The
+customized templates are:
 
-- `connection.ex.mustache` - HTTP client configuration
-- `mix.exs.mustache` - Mix project file
-- `application.ex.mustache` - Application supervisor
-- `README.md.mustache` - Generated README
+- `connection.ex.mustache` — Finch adapter, timeouts, telemetry, and
+  idempotent-only retries on top of the stock connection (auth support and
+  `request/2` preserved)
+- `mix.exs.mustache` — dev/test tooling, docs, coverage, and the
+  `Application` supervisor wiring
+- `application.ex.mustache` — Finch pool supervisor (registered as an extra
+  supporting file via the `files:` section of `generator-config.yaml`)
+- `model.mustache` — moduledoc fallback for schemas without descriptions
+
+If you upgrade openapi-generator, re-vendor the stock templates and re-apply
+those customizations (see the note at the top of `generator-config.yaml`).
 
 ### Protected Files
 
-Files listed in `.openapi-generator-ignore` are never overwritten:
+Files listed in `.openapi-generator-ignore` are never overwritten during
+regeneration: configuration, tests, scripts, workflows, docs, and this
+README.
 
-- All configuration files
-- All tests
-- All scripts
-- Custom documentation
+### Coverage Threshold
 
-### Post-Generation Processing
+`coveralls.json` ships with `minimum_coverage: 0` so a freshly generated SDK
+passes CI. Raise it once you've added tests for your API operations:
 
-Edit `scripts/post-generate.sh` to add custom post-processing:
-
-- Code transformations
-- Additional file generation
-- Custom validation
+```json
+{ "coverage_options": { "minimum_coverage": 80 } }
+```
 
 ## Testing
 
-### Run All Tests
-
 ```bash
-mix test
+mix test                     # all tests
+mix coveralls                # with coverage (threshold from coveralls.json)
+mix coveralls.html           # HTML report
+mix test test/integration/   # integration tests only
 ```
 
-### Run with Coverage
+## Releasing & Publishing
 
-```bash
-mix coveralls
-mix coveralls.html  # Generate HTML report
-```
+Releases are git-ops driven: PR titles are validated against
+[Conventional Commits](https://www.conventionalcommits.org) (use squash
+merges), and the **Release** workflow (or `mix git_ops.release` locally)
+derives the next version from the commit history, updates `@version` and
+CHANGELOG.md, tags, and triggers the Hex.pm publish workflow:
 
-### Run Integration Tests Only
+- `fix: ...` → patch, `feat: ...` → minor, `feat!:` / `BREAKING CHANGE` → major
+- `@version` in mix.exs is the version source of truth — regeneration
+  preserves it automatically
+- Requires the `HEX_API_KEY` secret (from `mix hex.user auth`); the
+  `<!-- changelog -->` marker it needs is already in the CHANGELOG.md that
+  setup writes
 
-```bash
-mix test test/integration/
-```
-
-### Run Specific Test
-
-```bash
-mix test test/unit/connection_test.exs
-```
-
-## Code Quality
-
-### Format Code
-
-```bash
-mix format
-```
-
-### Run Linter
-
-```bash
-mix credo --strict
-```
-
-### Run Type Checker
-
-```bash
-mix dialyzer
-```
-
-## Publishing
-
-### Manual Publishing
-
-```bash
-./scripts/publish.sh
-```
-
-This script will:
-- Run all tests
-- Check code formatting
-- Verify version
-- Build documentation
-- Publish to Hex.pm
-- Create git tag
-
-### Automatic Publishing
-
-Push a version tag to trigger automatic publishing:
-
-```bash
-# Update version in mix.exs
-git add mix.exs
-git commit -m "Bump version to 1.0.0"
-git tag v1.0.0
-git push origin main --tags
-```
-
-## Configuration
-
-### Generator Config
-
-Edit `generator-config.yaml` to customize SDK generation:
-
-```yaml
-additionalProperties:
-  packageName: "my_api_client"
-  moduleName: "MyApiClient"
-  packageVersion: "1.0.0"
-```
-
-### GitHub Secrets
-
-Required secrets for workflows:
-
-- `HEX_API_KEY` - For publishing to Hex.pm (get from `mix hex.user auth`)
+Manual fallbacks still work: `./scripts/publish.sh` locally, or push a
+`v*.*.*` tag to trigger publish.yml directly.
 
 ## Contributing
 
@@ -335,13 +279,3 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - [Elixir Tesla](https://github.com/elixir-tesla/tesla)
 - [Finch](https://github.com/sneako/finch)
 - [Hex.pm](https://hex.pm/)
-
-## Support
-
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review the documentation
-
----
-
-**Generated with ❤️ using the Elixir SDK Generator Template**

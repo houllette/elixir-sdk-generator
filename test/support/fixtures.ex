@@ -105,7 +105,7 @@ defmodule Fixtures do
     case File.read(path) do
       {:ok, content} ->
         case Path.extname(filename) do
-          ".json" -> Jason.decode(content)
+          ".json" -> JSON.decode(content)
           _ -> {:ok, content}
         end
 

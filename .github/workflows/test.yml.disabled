@@ -6,102 +6,104 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   MIX_ENV: test
-  ELIXIR_VERSION: "1.18"
-  OTP_VERSION: "26.0"
 
 jobs:
   test:
-    name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    name: Lint & test
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        elixir: [1.18"]
-        otp: ["26.0"]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Elixir
+      - name: Set up BEAM
+        id: beam
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: ${{ matrix.elixir }}
-          otp-version: ${{ matrix.otp }}
+          version-file: .tool-versions
+          version-type: strict
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
+      - name: Cache deps and build
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}
+          key: mix-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+            mix-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - name: Install dependencies
         run: mix deps.get
 
-      - name: Compile code
+      - name: Check for unused dependencies
+        run: mix deps.unlock --check-unused
+
+      # Informational: also flags advisories in test-only transitive deps
+      # (e.g. cowlib via bypass) that don't ship with the SDK and may have no
+      # fixed release yet. Review the log; it does not fail the build.
+      - name: Audit dependencies (informational)
+        run: mix hex.audit
+        continue-on-error: true
+
+      - name: Compile (warnings as errors)
         run: mix compile --warnings-as-errors
-
-      - name: Run tests
-        run: mix test --cover
-
-      - name: Check code coverage
-        run: |
-          # Get coverage percentage
-          COVERAGE=$(mix coveralls.json | grep -oP '"coverage":\s*\K[0-9.]+' || echo "0")
-          echo "Coverage: ${COVERAGE}%"
-
-          # Fail if coverage drops below threshold
-          THRESHOLD=80
-          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
-            echo "Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
-            exit 1
-          fi
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./cover/excoveralls.json
-          flags: unittests
-          name: codecov-umbrella
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
-
-      - name: Install dependencies
-        run: mix deps.get
 
       - name: Check formatting
         run: mix format --check-formatted
 
-      - name: Run Credo
+      - name: Credo
         run: mix credo --strict
+
+      # Coverage threshold is configured in coveralls.json (minimum_coverage).
+      # It defaults to 0 so a freshly generated SDK passes; raise it once you
+      # have added tests for your API operations.
+      - name: Run tests with coverage
+        run: mix coveralls
+
+  # The SDK declares `elixir: "~> 1.18"` in mix.exs; this job proves it still
+  # works on the minimum supported toolchain.
+  compat:
+    name: Minimum supported (Elixir 1.18 / OTP 27)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-compat-${{ runner.os }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-compat-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Run tests
+        run: mix test
 
   dialyzer:
     name: Dialyzer
@@ -111,32 +113,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Elixir
+      - name: Set up BEAM
+        id: beam
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+          version-file: .tool-versions
+          version-type: strict
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
+      - name: Cache deps and build
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          key: mix-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            mix-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
-      - name: Cache PLT
-        uses: actions/cache@v3
+      # PLTs are expensive to build; cache them separately so a mix.lock
+      # change doesn't force a full rebuild.
+      - name: Cache PLTs
+        uses: actions/cache@v4
         with:
           path: priv/plts
-          key: ${{ runner.os }}-plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          key: plt-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            plt-${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
 
       - name: Install dependencies
         run: mix deps.get
 
-      - name: Run Dialyzer
-        run: mix dialyzer
+      - name: Dialyzer
+        run: mix dialyzer --format github

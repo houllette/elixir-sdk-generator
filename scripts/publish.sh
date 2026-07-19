@@ -96,7 +96,8 @@ run_quality_checks() {
   # Credo (if available)
   if mix help credo &> /dev/null; then
     if ! mix credo --strict; then
-      echo_warn "Credo found issues (continuing anyway)"
+      echo_error "Credo (strict) found issues. Fix them before publishing."
+      exit 1
     fi
   fi
 

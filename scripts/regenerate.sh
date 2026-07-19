@@ -84,7 +84,8 @@ validate_spec() {
 backup_generated() {
   echo_step "Creating backup of generated files..."
 
-  local backup_dir="$PROJECT_ROOT/.backup/$(date +%Y%m%d_%H%M%S)"
+  local backup_dir
+  backup_dir="$PROJECT_ROOT/.backup/$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$backup_dir"
 
   if [[ -d "$PROJECT_ROOT/lib" ]]; then
@@ -93,6 +94,39 @@ backup_generated() {
   fi
 
   echo "$backup_dir" > "$PROJECT_ROOT/.last_backup"
+
+  # Keep only the 5 most recent backups
+  local total excess
+  total=$(ls -1d "$PROJECT_ROOT/.backup"/*/ 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$total" -gt 5 ]]; then
+    excess=$((total - 5))
+    ls -1d "$PROJECT_ROOT/.backup"/*/ | sort | head -n "$excess" | while read -r dir; do
+      rm -rf "$dir"
+    done
+    echo_info "Pruned $excess old backup(s) (keeping 5 most recent)"
+  fi
+}
+
+# Keep the released version across regenerations. `mix git_ops.release`
+# manages @version in mix.exs; since mix.exs is regenerated from the template
+# with packageVersion from generator-config.yaml, sync that value from the
+# current mix.exs before generating so the version (and the user-agent string
+# derived from it) survives.
+sync_package_version() {
+  local mix_file="$PROJECT_ROOT/mix.exs"
+
+  if [[ ! -f "$mix_file" ]]; then
+    return 0
+  fi
+
+  local current_version
+  current_version=$(grep -m1 '@version' "$mix_file" | sed -E 's/.*"([^"]+)".*/\1/')
+
+  if [[ -n "$current_version" ]]; then
+    sed -i.bak -E "s|^([[:space:]]*packageVersion:[[:space:]]*\").*(\")|\1$current_version\2|" "$GENERATOR_CONFIG"
+    rm -f "$GENERATOR_CONFIG.bak"
+    echo_info "Using version $current_version from mix.exs"
+  fi
 }
 
 # Generate SDK
@@ -202,10 +236,16 @@ check_breaking_changes() {
   # Compare public API surfaces
   echo_info "Comparing with backup from $last_backup"
 
-  # Simple file count comparison
-  local old_count new_count
-  old_count=$(find "$last_backup/lib" -name "*.ex" 2>/dev/null | wc -l)
-  new_count=$(find "$PROJECT_ROOT/lib" -name "*.ex" 2>/dev/null | wc -l)
+  # Simple file count comparison. A missing lib/ (e.g. on the very first
+  # generation) counts as zero files; guard the finds so `set -o pipefail`
+  # does not kill the script.
+  local old_count=0 new_count=0
+  if [[ -d "$last_backup/lib" ]]; then
+    old_count=$(find "$last_backup/lib" -name "*.ex" | wc -l | tr -d ' ')
+  fi
+  if [[ -d "$PROJECT_ROOT/lib" ]]; then
+    new_count=$(find "$PROJECT_ROOT/lib" -name "*.ex" | wc -l | tr -d ' ')
+  fi
 
   if [[ $new_count -ne $old_count ]]; then
     echo_warn "Number of generated files changed: $old_count -> $new_count"
@@ -224,10 +264,13 @@ main() {
   check_generator
   validate_spec
   backup_generated
+  sync_package_version
   generate_sdk
   post_generate
-  format_code
+  # deps must be installed before formatting: .formatter.exs imports the
+  # tesla dep's formatter rules
   install_deps
+  format_code
   check_breaking_changes
   run_tests
 

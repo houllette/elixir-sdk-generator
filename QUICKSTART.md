@@ -4,9 +4,11 @@ Get your SDK up and running in minutes!
 
 ## Prerequisites
 
-- Elixir and Erlang/OTP
-- OpenAPI Generator installed via preferred method
+- Erlang/Elixir as pinned in `.tool-versions` (Elixir 1.20.2 / OTP 29)
+- Java 11+ (required by OpenAPI Generator)
+- OpenAPI Generator: `brew install openapi-generator` or `npm install -g @openapitools/openapi-generator-cli`
 - Git
+- `jq` (only for non-interactive setup)
 
 ## Step 1: Clone or Use Template
 
@@ -23,104 +25,92 @@ git clone https://github.com/your-username/elixir-sdk-generator.git my-sdk
 cd my-sdk
 ```
 
-## Step 2: Clean Up Template (Optional but Recommended)
-
-Remove template-specific content to start fresh:
+## Step 2: Run Setup
 
 ```bash
-chmod +x scripts/*.sh  # Make scripts executable (if needed)
-./scripts/cleanup-template.sh
-```
-
-This will:
-- Reset CHANGELOG.md to a fresh state
-- Create a minimal README for your SDK
-- Remove template documentation files
-- Optionally reset git history to start clean
-
-**Tip:** Run this immediately after cloning to avoid confusion with template history!
-
-## Step 3: Run Setup
-
-```bash
+# Interactive
 ./scripts/setup.sh
+
+# Or non-interactive — copy setup.example.json, edit it, then:
+./scripts/setup.sh --config my-setup.json
 ```
 
-You'll be prompted for:
-- **Package name**: `my_api_client` (lowercase, underscores)
-- **Module name**: `MyApiClient` (PascalCase)
-- **Description**: Brief description of your SDK
-- **Author info**: Your name and email
-- **GitHub info**: Username and repo name
-- **Base URL**: API base URL (optional)
-- **OpenAPI spec**: Path or URL to your OpenAPI specification
+You'll be asked for:
 
-## Step 4: Generate SDK
+- **Package name**: `my_api_client` (lowercase, underscores)
+- **Module namespace**: optional PascalCase (e.g. `MyAPIClient`); derived
+  from the package name when left blank
+- **Description**: optional; falls back to the spec's `info.description`
+- **GitHub info**: username and repo name
+- **Base URL**: API base URL (optional)
+- **OpenAPI spec**: path or URL (optional; keeps the bundled example spec).
+  A URL is recorded in `.spec-source` and enables the weekly spec-sync
+  workflow that opens a PR when the upstream spec changes.
+- **License**: SPDX id, default `MIT`
+
+Setup fresh-initializes your SDK's release files (README, CHANGELOG with the
+release-automation marker, LICENSE — starting your SDK's history at zero
+instead of inheriting the template's), enables the GitHub Actions workflows,
+and removes template-only artifacts (QUICKSTART.md, the smoke-test workflow,
+and the one-shot `/setup-sdk` skill). In Claude Code you can run the
+`/setup-sdk` skill instead — it automates this step and the next, then cleans
+itself up, leaving the `/regenerate` skill for ongoing maintenance.
+
+## Step 3: Generate SDK
 
 ```bash
 ./scripts/regenerate.sh
 ```
 
-This will:
-✅ Validate your OpenAPI spec
-✅ Generate Elixir SDK code
-✅ Set up connection pooling
-✅ Add retry logic
-✅ Format code
-✅ Install dependencies
-✅ Run tests
-
-## Step 5: Review Generated Code
+This validates the spec, generates the SDK, creates starter test files for
+each API module, installs dependencies, formats everything, and runs the
+tests. All checks pass on a fresh generation:
 
 ```bash
-# View generated structure
-tree lib/
-
-# Run tests
 mix test
-
-# Check code quality
-mix format
-mix credo
+mix credo --strict
+mix dialyzer
 ```
 
-## Step 6: Add Custom Tests
+## Step 4: Add Real Tests
 
-Create tests for your API endpoints
+The post-generation step creates one starter test per API module in
+`test/unit/`. Flesh them out using the mock server:
 
-## Step 7: Configure GitHub Actions
+```elixir
+test "gets a user", %{bypass: bypass, conn: conn} do
+  MockServer.expect_get(bypass, "/users/1", 200, %{id: 1, name: "Test"})
+  assert {:ok, %MySDK.Model.User{id: 1}} = Users.get_user(conn, 1)
+end
+```
 
-### Required Secrets
+Then raise the coverage bar in `coveralls.json`:
 
-Add these secrets in GitHub Settings → Secrets:
+```json
+{ "coverage_options": { "minimum_coverage": 80 } }
+```
 
-1. **HEX_API_KEY**: Get from `mix hex.user auth`
+## Step 5: Configure GitHub Actions
 
-### Enable Workflows
+Add the `HEX_API_KEY` secret (Settings → Secrets → Actions) — get it from
+`mix hex.user auth`. See `.github/workflows/README.md` for the full workflow
+documentation.
 
-Your repository now has these workflows:
+## Step 6: Make Your First Release
 
-- ✅ **test.yml**: Runs on every push
-- ✅ **regenerate-sdk.yml**: Auto-regenerates on spec changes
-- ✅ **publish.yml**: Publishes to Hex.pm on version tags
-- ✅ **breaking-changes.yml**: Detects breaking changes in PRs
+Releases are automated with git_ops + conventional commits:
 
-## Step 8: Make Your First Release
+1. Merge PRs with conventional titles (`feat: ...`, `fix: ...` — enforced by
+   the conventional-commits workflow; use squash merges)
+2. Run the **Release** workflow from the Actions tab. The first run tags the
+   current `@version`; later runs derive the bump from commit history,
+   update CHANGELOG.md, tag, and trigger publishing to Hex.pm
+3. Or locally: `mix git_ops.release`, then `git push --follow-tags`
+
+Before releasing, run the full quality gate locally:
 
 ```bash
-# 1. Update version in mix.exs
-# @version "1.0.0"
-
-# 2. Update CHANGELOG.md
-vim CHANGELOG.md
-
-# 3. Commit and tag
-git add .
-git commit -m "Release v1.0.0"
-git tag v1.0.0
-
-# 4. Push (this triggers automatic publishing)
-git push origin main --tags
+mix check
 ```
 
 ## Common Tasks
@@ -128,48 +118,10 @@ git push origin main --tags
 ### Update API from New Spec
 
 ```bash
-# Replace openapi-spec.yaml with new version
 cp /path/to/new/spec.yaml openapi-spec.yaml
-
-# Regenerate
 ./scripts/regenerate.sh
-
-# Review changes
-git diff
-
-# Commit
-git add .
-git commit -m "Update API from spec v2.0"
-git push
-```
-
-### Add Integration Tests
-
-```elixir
-# test/integration/user_workflow_test.exs
-defmodule UserWorkflowTest do
-  use TestCase
-
-  setup do
-    bypass = MockServer.setup()
-    conn = Connection.new(base_url: MockServer.url(bypass))
-    {:ok, bypass: bypass, conn: conn}
-  end
-
-  test "complete user workflow", %{bypass: bypass, conn: conn} do
-    # Create user
-    MockServer.expect_post(bypass, "/users", 201, %{id: 1})
-    {:ok, response} = Users.create_user(conn, %{name: "Test"})
-
-    # Get user
-    MockServer.expect_get(bypass, "/users/1", 200, %{id: 1})
-    {:ok, response} = Users.get_user(conn, 1)
-
-    # Update user
-    MockServer.expect_put(bypass, "/users/1", 200, %{id: 1})
-    {:ok, response} = Users.update_user(conn, 1, %{name: "Updated"})
-  end
-end
+git diff        # review changes
+git add . && git commit -m "Update API from spec v2.0"
 ```
 
 ### Configure Runtime Settings
@@ -178,71 +130,45 @@ end
 # config/runtime.exs
 config :my_api_client,
   base_url: System.get_env("API_BASE_URL", "https://api.example.com"),
-  pool_size: String.to_integer(System.get_env("HTTP_POOL_SIZE", "25")),
-  api_key: System.get_env("API_KEY")
+  pool_size: String.to_integer(System.get_env("HTTP_POOL_SIZE", "25"))
 ```
 
 ### Customize Generated Code
 
-Edit templates in `.openapi-generator/templates/`:
-
-- `connection.ex.mustache` - Connection logic
-- `mix.exs.mustache` - Dependencies and configuration
-- `application.ex.mustache` - Application supervisor
-- `README.md.mustache` - Generated README
-
-After editing templates, run `./scripts/regenerate.sh`.
+Edit templates in `.openapi-generator/templates/` and rerun
+`./scripts/regenerate.sh`. Note that the directory must always contain the
+**complete** template set — the elixir generator does not fall back to its
+built-in templates. See the README's "Custom Templates" section.
 
 ## Troubleshooting
 
 ### OpenAPI Generator Not Found
 
 ```bash
-# Install via Homebrew (macOS/Linux) - Recommended
-brew install openapi-generator
-
-# Or via npm
+brew install openapi-generator          # macOS/Linux (recommended)
 npm install -g @openapitools/openapi-generator-cli
-
-# Or use Docker
 docker pull openapitools/openapi-generator-cli
 ```
 
 ### Tests Failing After Regeneration
 
-1. Check if API changed (breaking changes)
+1. Check if the API changed (see the breaking-changes workflow output)
 2. Update test expectations
 3. Add tests for new endpoints
 
 ### Coverage Below Threshold
 
 ```bash
-# Generate coverage report
-mix coveralls.html
-
-# Open coverage report
-open cover/excoveralls.html
-
-# Add tests for uncovered code
+mix coveralls.html && open cover/excoveralls.html
 ```
+
+Add tests for uncovered code, or adjust `minimum_coverage` in `coveralls.json`.
 
 ### Format Errors
 
 ```bash
-# Auto-fix formatting
 mix format
-
-# Check what would change
-mix format --check-formatted
 ```
-
-## Next Steps
-
-1. ⭐ Star the repository on GitHub
-2. 📖 Read the full [README.md](README.md)
-3. 🤝 Review [CONTRIBUTING.md](CONTRIBUTING.md)
-4. 📝 Check [CHANGELOG.md](CHANGELOG.md)
-5. 🚀 Deploy your SDK to production!
 
 ## Resources
 
@@ -251,14 +177,3 @@ mix format --check-formatted
 - [Elixir Tesla](https://github.com/elixir-tesla/tesla)
 - [Finch HTTP Client](https://github.com/sneako/finch)
 - [Hex.pm Publishing Guide](https://hex.pm/docs/publish)
-
-## Support
-
-- 🐛 [Report a bug](../../issues/new?template=bug_report.md)
-- 💡 [Request a feature](../../issues/new?template=feature_request.md)
-- 📚 [View documentation](README.md)
-- 💬 [Join discussions](../../discussions)
-
----
-
-Happy coding! 🎉

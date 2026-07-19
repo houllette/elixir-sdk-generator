@@ -5,9 +5,13 @@
 config/**
 .formatter.exs
 .tool-versions
+.gitignore
 
 # Test infrastructure (completely custom)
 test/**
+
+# Coverage configuration
+coveralls.json
 
 # Scripts (custom automation)
 scripts/**
@@ -19,9 +23,19 @@ scripts/**
 CONTRIBUTING.md
 CHANGELOG.md
 README.md
+LICENSE
+
+# Agent guidance and editor config
+AGENTS.md
+CLAUDE.md
+.claude/**
+.editorconfig
+
+# Spec source URL (used by the spec-sync workflow)
+.spec-source
 
 # Template configuration
-setup.json
+setup.example.json
 generator-config.yaml
 .openapi-generator-ignore
 

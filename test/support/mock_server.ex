@@ -41,7 +41,7 @@ defmodule MockServer do
     Bypass.expect_once(bypass, "GET", path, fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(status, Jason.encode!(response_body))
+      |> Plug.Conn.resp(status, JSON.encode!(response_body))
     end)
   end
 
@@ -56,7 +56,7 @@ defmodule MockServer do
     Bypass.expect_once(bypass, "POST", path, fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(status, Jason.encode!(response_body))
+      |> Plug.Conn.resp(status, JSON.encode!(response_body))
     end)
   end
 
@@ -71,7 +71,7 @@ defmodule MockServer do
     Bypass.expect_once(bypass, "PUT", path, fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(status, Jason.encode!(response_body))
+      |> Plug.Conn.resp(status, JSON.encode!(response_body))
     end)
   end
 
@@ -86,7 +86,7 @@ defmodule MockServer do
     Bypass.expect_once(bypass, "DELETE", path, fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(status, if(response_body == "", do: "", else: Jason.encode!(response_body)))
+      |> Plug.Conn.resp(status, if(response_body == "", do: "", else: JSON.encode!(response_body)))
     end)
   end
 

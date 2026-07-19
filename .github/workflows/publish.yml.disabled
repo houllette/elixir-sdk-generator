@@ -9,35 +9,32 @@ on:
     tags:
       - "v*.*.*"
 
-env:
-  ELIXIR_VERSION: "1.15"
-  OTP_VERSION: "26.0"
-  MIX_ENV: prod
-
 jobs:
   publish:
     name: Publish to Hex.pm
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Elixir
+      - name: Set up BEAM
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+          version-file: .tool-versions
+          version-type: strict
 
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-publish-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            ${{ runner.os }}-mix-publish-
 
       - name: Install dependencies
         run: mix deps.get
@@ -49,7 +46,7 @@ jobs:
         run: mix format --check-formatted
 
       - name: Run Credo
-        run: mix credo --strict || true
+        run: mix credo --strict
 
       - name: Build documentation
         run: mix docs
@@ -78,56 +75,19 @@ jobs:
       - name: Publish to Hex.pm
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        run: |
-          mix hex.publish --yes
+        run: mix hex.publish --yes
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
           body: |
             ## Release ${{ steps.version.outputs.version }}
-
-            ### Installation
-
-            Add to your `mix.exs` dependencies:
-
-            ```elixir
-            {:your_package_name, "~> ${{ steps.version.outputs.version }}"}
-            ```
-
-            ### Changes
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
 
             ### Documentation
 
-            - [Hex Docs](https://hexdocs.pm/your_package_name/${{ steps.version.outputs.version }})
+            - [Hex Docs](https://hexdocs.pm/${{ github.event.repository.name }})
             - [GitHub](https://github.com/${{ github.repository }})
-
-          draft: false
-          prerelease: false
-
-  notify:
-    name: Notify
-    runs-on: ubuntu-latest
-    needs: publish
-    if: always()
-
-    steps:
-      - name: Notify success
-        if: needs.publish.result == 'success'
-        run: |
-          echo "✅ Successfully published to Hex.pm!"
-          # Add your notification logic here (Slack, Discord, etc.)
-
-      - name: Notify failure
-        if: needs.publish.result == 'failure'
-        run: |
-          echo "❌ Failed to publish to Hex.pm!"
-          echo "Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          # Add your notification logic here
