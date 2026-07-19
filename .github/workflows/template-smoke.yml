@@ -49,13 +49,6 @@ jobs:
           done
           shellcheck -S warning scripts/*.sh
 
-      - name: Setup Elixir
-        if: steps.template_check.outputs.is_template == 'true'
-        uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-
       - name: Setup Java (for OpenAPI Generator)
         if: steps.template_check.outputs.is_template == 'true'
         uses: actions/setup-java@v4
@@ -89,9 +82,27 @@ jobs:
           EOF
           ./scripts/setup.sh --config /tmp/smoke-setup.json --no-git
 
+      # Generation runs BEFORE the BEAM is installed: setup-beam's post-install
+      # (mix local.rebar) requires a mix.exs, which only exists after
+      # generation. regenerate.sh skips its mix-based steps gracefully when
+      # mix is absent; they are run explicitly below instead.
       - name: Regenerate SDK
         if: steps.template_check.outputs.is_template == 'true'
         run: SKIP_TESTS=1 ./scripts/regenerate.sh
+
+      - name: Setup Elixir
+        if: steps.template_check.outputs.is_template == 'true'
+        uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      # regenerate.sh could not run these without mix on the PATH
+      - name: Install dependencies and format generated code
+        if: steps.template_check.outputs.is_template == 'true'
+        run: |
+          mix deps.get
+          mix format
 
       - name: Compile with warnings as errors
         if: steps.template_check.outputs.is_template == 'true'

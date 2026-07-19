@@ -41,9 +41,10 @@ validate_yaml_syntax() {
     fi
   fi
 
-  # Try using python
-  if command -v python3 &> /dev/null; then
-    if python3 -c "import yaml; yaml.safe_load(open('$OPENAPI_SPEC'))" 2>&1; then
+  # Try using python (only if PyYAML is importable — a missing module is not
+  # a validation failure)
+  if command -v python3 &> /dev/null && python3 -c "import yaml" 2>/dev/null; then
+    if python3 -c "import yaml; yaml.safe_load(open('$OPENAPI_SPEC'))" > /dev/null 2>&1; then
       echo_info "YAML syntax is valid"
       return 0
     else
@@ -52,7 +53,7 @@ validate_yaml_syntax() {
     fi
   fi
 
-  echo_warn "No YAML validator found (yq or python3), skipping syntax check"
+  echo_warn "No YAML validator found (yq or python3 with PyYAML), skipping syntax check"
   return 0
 }
 
