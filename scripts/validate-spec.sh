@@ -41,19 +41,9 @@ validate_yaml_syntax() {
     fi
   fi
 
-  # Try using python (only if PyYAML is importable — a missing module is not
-  # a validation failure)
-  if command -v python3 &> /dev/null && python3 -c "import yaml" 2>/dev/null; then
-    if python3 -c "import yaml; yaml.safe_load(open('$OPENAPI_SPEC'))" > /dev/null 2>&1; then
-      echo_info "YAML syntax is valid"
-      return 0
-    else
-      echo_error "YAML syntax is invalid"
-      return 1
-    fi
-  fi
-
-  echo_warn "No YAML validator found (yq or python3 with PyYAML), skipping syntax check"
+  # No yq available: skip the standalone syntax check. The OpenAPI Generator
+  # validation below is authoritative and reports YAML/JSON syntax errors.
+  echo_warn "yq not found, deferring syntax checking to OpenAPI Generator validation"
   return 0
 }
 

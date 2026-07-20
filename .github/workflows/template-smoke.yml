@@ -129,7 +129,7 @@ jobs:
             echo "::error::mix sbom did not produce bom.cdx.json"
             exit 1
           fi
-          python3 -c "import json; json.load(open('bom.cdx.json'))" && echo "SBOM generated and valid JSON."
+          elixir -e 'JSON.decode!(File.read!("bom.cdx.json"))' && echo "SBOM generated and valid JSON."
 
       - name: Verify key generated files exist
         if: steps.template_check.outputs.is_template == 'true'

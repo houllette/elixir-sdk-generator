@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **All template scripting is now Elixir or POSIX shell — python is no
+  longer an (undeclared) dependency anywhere**: the CI SBOM drift check is
+  `scripts/verify_sbom.exs` (built-in `JSON`, unified diff via `diff -u`),
+  the smoke test validates the SBOM with `elixir -e`, validate-spec.sh
+  defers syntax checking to the authoritative OpenAPI Generator validation
+  instead of a PyYAML fallback, and the spec-patches guide documents
+  executable `.exs` patches (with a note on order-preserving JSON via
+  OTP's `:json` custom decoders) as the recommended form
+
 ### Fixed (from the first production mint — ex_bifrost, ~490 operations)
 - `gitUserId`/`gitRepoId` moved to top-level generator config keys — under
   `additionalProperties` the generator ignored them and shipped
