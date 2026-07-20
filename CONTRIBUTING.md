@@ -63,9 +63,9 @@ Feature suggestions are welcome! Please:
 
 ### Prerequisites
 
-- Elixir 1.14 or later
-- Erlang/OTP 25 or later
+- Erlang/Elixir as pinned in `.tool-versions` (asdf/mise)
 - OpenAPI Generator (install via Homebrew, npm, or Docker)
+- Java 11+ (required by OpenAPI Generator)
 - Git
 
 ### Setup
@@ -114,28 +114,17 @@ mix test.watch
 
 ### Commit Messages
 
-Write clear, concise commit messages:
+Use [Conventional Commits](https://www.conventionalcommits.org) — release
+automation (git_ops) derives version bumps and the CHANGELOG from them, and
+PR titles are validated in CI:
 
-```
-Short summary (50 chars or less)
+- `feat:` - New feature (minor bump)
+- `fix:` - Bug fix (patch bump)
+- `feat!:` / `BREAKING CHANGE:` - Breaking change (major bump)
+- `docs:` / `style:` / `refactor:` / `test:` / `chore:` - No release
 
-More detailed explanation if needed. Wrap at 72 characters.
-Explain the problem this commit solves and why you chose
-this solution.
-
-Resolves: #123
-See also: #456, #789
-```
-
-**Commit Message Format:**
-
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation changes
-- `style:` - Code style changes (formatting, etc.)
-- `refactor:` - Code refactoring
-- `test:` - Adding or updating tests
-- `chore:` - Maintenance tasks
+Keep the summary under ~70 characters; add body detail when the why isn't
+obvious.
 
 ### Branch Naming
 
@@ -350,14 +339,15 @@ end
 
 ## Release Process
 
-1. **Update version** in `mix.exs`
-2. **Update CHANGELOG.md** with changes
-3. **Run tests**: `mix test`
-4. **Run quality checks**: `mix format && mix credo`
-5. **Commit changes**: `git commit -m "Bump version to X.Y.Z"`
-6. **Create tag**: `git tag vX.Y.Z`
-7. **Push**: `git push origin main --tags`
-8. **GitHub Actions** will automatically publish to Hex.pm
+Releases are automated with git_ops from conventional commit history — do
+not bump versions or edit the changelog by hand:
+
+1. Merge PRs with conventional titles (squash merges)
+2. Run the **Release** workflow (Actions tab): it derives the version bump,
+   updates `@version` and CHANGELOG.md, tags, and triggers publishing.
+   The very first release tags the current version directly
+3. Locally: `mix git_ops.release && git push --follow-tags` (first release:
+   `git tag -a v0.1.0` manually — see the workflows README)
 
 ## Questions?
 

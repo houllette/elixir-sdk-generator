@@ -43,9 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spec after every download and before every regeneration — durable local
   fixes for upstream spec defects that spec-sync would otherwise reintroduce
 - Setup now fully cleans up after itself (removes `scripts/setup.sh`,
-  `setup.example.json`, tombstone comments, and the CONTRIBUTING setup
-  section), personalizes the config examples with the real package name,
-  and drops any stale template SBOM
+  `setup.example.json`, and tombstone comments), personalizes the config
+  examples with the real package name, drops any stale template SBOM, and
+  **rewrites CONTRIBUTING.md and the workflows README for the minted SDK**
+  (the template versions contradicted the SDK's toolchain, commit
+  conventions, and automated release flow); the template's own CONTRIBUTING
+  was updated to match reality too
 - Documented the Hex ≥ 2.5 CI key flow (browser-created `api:write` keys;
   `mix hex.user key generate` no longer exists)
 

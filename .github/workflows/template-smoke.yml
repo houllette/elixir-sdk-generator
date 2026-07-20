@@ -195,4 +195,12 @@ jobs:
             echo "::error::Fresh README.md should include the badge row"
             exit 1
           fi
+          if ! grep -q '# Contributing to example_api' CONTRIBUTING.md; then
+            echo "::error::CONTRIBUTING.md should be rewritten for the minted SDK"
+            exit 1
+          fi
+          if grep -q 'disabled' .github/workflows/README.md; then
+            echo "::error::workflows README should be rewritten for the minted SDK (still documents the .disabled scheme)"
+            exit 1
+          fi
           echo "All expected files generated; docs fresh-initialized; template-only artifacts cleaned up."
