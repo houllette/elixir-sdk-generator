@@ -351,6 +351,34 @@ conn = YourSDK.Connection.new()
 {:ok, result} = YourSDK.Api.SomeApi.some_operation(conn, params)
 \`\`\`
 
+## Error handling
+
+Operations return one of three shapes — note that \`{:ok, _}\` alone is **not**
+a safe success match:
+
+1. **Success statuses** decode into the mapped model struct.
+2. **Error statuses declared in the OpenAPI spec** *also* return \`:ok\`,
+   wrapping the spec's error model (an openapi-generator convention) — e.g. a
+   400 comes back as \`{:ok, %YourSDK.Model.SomeErrorResponse{}}\`. Match on
+   the struct, not just the tuple tag.
+3. **Statuses the spec does not declare** (gateway 401/403s, proxy 502s, rate
+   limits) return \`{:error, %Tesla.Env{status: status, body: body}}\`, with
+   the body decoded to a map when the response is JSON.
+
+Transport failures (connection refused, timeouts, DNS) surface as
+\`{:error, reason}\` where \`reason\` comes from the configured Tesla adapter —
+e.g. \`%Finch.TransportError{}\` with the default Finch adapter.
+
+## Live smoke testing
+
+The unit suite mocks the API from the spec, so it cannot catch places where
+the spec and the real server disagree. A live smoke-test scaffold ships in
+\`test/integration/live_test.exs\` (tagged \`:live\`, excluded by default):
+
+\`\`\`bash
+SDK_LIVE_BASE_URL=https://api.example.com SDK_LIVE_TOKEN=... mix test.live
+\`\`\`
+
 ## Development
 
 \`\`\`bash

@@ -167,8 +167,18 @@ defmodule {{moduleName}}.Connection do
     {{/hasHttpBasicMethods}}
 
     {{#hasHttpBearerMethods}}
+    # Only add the middleware when a token was provided: Tesla.Middleware.BearerAuth
+    # interpolates the token unconditionally, so a nil token would send
+    # `authorization: Bearer ` — which many servers reject as a failed auth
+    # attempt instead of treating the request as anonymous.
     bearer_token = Keyword.get(options, :bearer_token)
-    middleware = [{Tesla.Middleware.BearerAuth, token: bearer_token} | middleware]
+
+    middleware =
+      if bearer_token do
+        [{Tesla.Middleware.BearerAuth, token: bearer_token} | middleware]
+      else
+        middleware
+      end
     {{/hasHttpBearerMethods}}
 
     {{#hasOAuthMethods}}

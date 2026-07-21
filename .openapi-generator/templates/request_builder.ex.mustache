@@ -204,9 +204,30 @@ defmodule {{moduleName}}.RequestBuilder do
 
   defp resolve_mapping(env, [_ | tail], struct), do: resolve_mapping(env, tail, struct)
 
-  defp resolve_mapping(env, [], nil), do: {:error, env}
+  defp resolve_mapping(env, [], nil), do: {:error, decode_error_body(env)}
 
   defp resolve_mapping(env, [], struct), do: decode(env, struct)
+
+  # Real servers return statuses the spec never declared (gateway 401/403s,
+  # proxy 502s, rate limits). Those fall through to `{:error, env}` — decode
+  # the body when it is JSON so callers get a map instead of a raw string.
+  defp decode_error_body(%Tesla.Env{body: body} = env) when is_binary(body) do
+    with true <- json_content_type?(env),
+         {:ok, decoded} <- {{moduleName}}.Deserializer.json_decode(body) do
+      %{env | body: decoded}
+    else
+      _ -> env
+    end
+  end
+
+  defp decode_error_body(env), do: env
+
+  defp json_content_type?(env) do
+    case Tesla.get_header(env, "content-type") do
+      nil -> false
+      content_type -> String.contains?(content_type, "json")
+    end
+  end
 
   defp decode(%Tesla.Env{} = env, false), do: {:ok, env}
 

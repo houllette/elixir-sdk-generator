@@ -135,6 +135,37 @@ defmodule RequestBuilderTest do
       assert {:error, ^env} = @rb.evaluate_response({:ok, env}, [{200, %{}}])
     end
 
+    test "decodes the JSON body of an unmapped error status" do
+      env = %Tesla.Env{
+        status: 401,
+        body: ~s({"error":"unauthorized"}),
+        headers: [{"content-type", "application/json; charset=utf-8"}]
+      }
+
+      assert {:error, %Tesla.Env{status: 401, body: %{"error" => "unauthorized"}}} =
+               @rb.evaluate_response({:ok, env}, [{200, %{}}])
+    end
+
+    test "leaves non-JSON unmapped error bodies untouched" do
+      env = %Tesla.Env{
+        status: 502,
+        body: "<html>Bad Gateway</html>",
+        headers: [{"content-type", "text/html"}]
+      }
+
+      assert {:error, ^env} = @rb.evaluate_response({:ok, env}, [{200, %{}}])
+    end
+
+    test "leaves malformed JSON unmapped error bodies untouched" do
+      env = %Tesla.Env{
+        status: 500,
+        body: "not-json",
+        headers: [{"content-type", "application/json"}]
+      }
+
+      assert {:error, ^env} = @rb.evaluate_response({:ok, env}, [{200, %{}}])
+    end
+
     test "passes through transport errors" do
       assert {:error, :nxdomain} = @rb.evaluate_response({:error, :nxdomain}, [{200, %{}}])
     end

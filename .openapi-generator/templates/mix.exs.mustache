@@ -28,6 +28,7 @@ defmodule {{moduleName}}.MixProject do
     [
       preferred_envs: [
         check: :test,
+        "test.live": :test,
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
@@ -82,7 +83,10 @@ defmodule {{moduleName}}.MixProject do
       ],
       # Canonical SBOM command — used by the pre-commit hook, CI, and the
       # publish workflow so they all produce the same artifact.
-      sbom: "sbom.cyclonedx --force --pretty --format json --classification library --output bom.cdx.json"
+      sbom: "sbom.cyclonedx --force --pretty --format json --classification library --output bom.cdx.json",
+      # Live smoke tests against a real API (see test/integration/live_test.exs).
+      # Needs SDK_LIVE_BASE_URL (and usually SDK_LIVE_TOKEN) in the environment.
+      "test.live": "test --include live test/integration/live_test.exs"
     ]
   end
 

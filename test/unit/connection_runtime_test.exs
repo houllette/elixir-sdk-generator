@@ -23,13 +23,24 @@ defmodule ConnectionRuntimeTest do
 
     test "forwards the bearer token when the spec defines bearer auth" do
       # The BearerAuth middleware is only generated for specs with a bearer
-      # security scheme; skip the assertion when this SDK's spec has none.
-      has_bearer =
-        Enum.any?(@connection.middleware(), &match?({Tesla.Middleware.BearerAuth, _opts}, &1))
+      # security scheme; for SDKs without one the option is silently ignored,
+      # so this asserts nothing for them.
+      middleware = @connection.middleware(bearer_token: "token")
 
-      if has_bearer do
-        assert {Tesla.Middleware.BearerAuth, token: "token"} in @connection.middleware(bearer_token: "token")
+      if Enum.any?(middleware, &match?({Tesla.Middleware.BearerAuth, _opts}, &1)) do
+        assert {Tesla.Middleware.BearerAuth, token: "token"} in middleware
       end
+    end
+
+    test "adds no auth middleware when no credentials are provided" do
+      # A connection built without credentials must send NO authorization
+      # header: Tesla's BearerAuth/BasicAuth interpolate their values
+      # unconditionally, and an empty `Authorization: Bearer ` header makes
+      # many servers reject public requests as failed auth attempts.
+      middleware = @connection.middleware()
+
+      refute Enum.any?(middleware, &match?({Tesla.Middleware.BearerAuth, _opts}, &1))
+      refute Enum.any?(middleware, &match?({Tesla.Middleware.BasicAuth, _opts}, &1))
     end
 
     test "retry middleware is on by default and removable with retry: false" do

@@ -1,7 +1,10 @@
 # Test Helper
 # This file is run before all tests
 
-# Configure ExUnit
+# Configure ExUnit. Live smoke tests (test/integration/live_test.exs) need a
+# real API deployment, so they stay out of the default run — `mix test.live`
+# pulls them back in via --include.
+ExUnit.configure(exclude: [:live])
 ExUnit.start()
 
 # Start Mox for mocking
